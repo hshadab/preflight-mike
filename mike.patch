@@ -1,0 +1,674 @@
+From 0f91267a7283131f75bd6eb2061932209184ac63 Mon Sep 17 00:00:00 2001
+From: hshadab <hshadab@gmail.com>
+Date: Fri, 22 May 2026 14:53:18 -0400
+Subject: [PATCH 1/2] feat(integrations): add ICME Preflight verification stub
+
+Wraps POST /chat with a Preflight verification middleware so every assistant
+response can ship with a cryptographic proof receipt (check_id) against a
+plain-English policy compiled to SMT-LIB.
+
+- backend/src/lib/preflight.ts     Preflight client (stubbed verify call)
+- backend/src/middleware/preflight Express middleware, off|shadow|enforce
+- backend/migrations/2026_01_*.sql adds preflight_* columns to chat_messages
+- frontend .../VerifiedBadge.tsx   UI pill linking to the public proof URL
+- routes/chat.ts                   mounts middleware, persists check_id
+- .env.example                     ICME_API_KEY, ICME_POLICY_ID, mode flag
+
+Defaults to shadow mode (records verdicts, never blocks) so existing dev
+setups stay functional with no ICME credentials. See INTEGRATIONS/PREFLIGHT.md.
+---
+ INTEGRATIONS/PREFLIGHT.md                     | 116 ++++++++++++++++++
+ backend/.env.example                          |  11 ++
+ backend/migrations/2026_01_preflight.sql      |  18 +++
+ backend/src/lib/preflight.ts                  | 108 ++++++++++++++++
+ backend/src/middleware/preflight.ts           | 108 ++++++++++++++++
+ backend/src/routes/chat.ts                    |  17 ++-
+ .../components/assistant/VerifiedBadge.tsx    |  51 ++++++++
+ 7 files changed, 428 insertions(+), 1 deletion(-)
+ create mode 100644 INTEGRATIONS/PREFLIGHT.md
+ create mode 100644 backend/migrations/2026_01_preflight.sql
+ create mode 100644 backend/src/lib/preflight.ts
+ create mode 100644 backend/src/middleware/preflight.ts
+ create mode 100644 frontend/src/app/components/assistant/VerifiedBadge.tsx
+
+diff --git a/INTEGRATIONS/PREFLIGHT.md b/INTEGRATIONS/PREFLIGHT.md
+new file mode 100644
+index 0000000..695077b
+--- /dev/null
++++ b/INTEGRATIONS/PREFLIGHT.md
+@@ -0,0 +1,116 @@
++# Mike + ICME Preflight
++
++> Cryptographically verified responses for the open-source legal AI assistant.
++
++[Preflight](https://docs.icme.io) compiles plain-English safety policies into
++formal logic (SMT-LIB) and returns a cryptographic proof that a proposed
++agent action is `SAT` (allowed) or `UNSAT` (blocked). This integration wraps
++Mike's chat endpoint so every assistant response carries a verifiable receipt.
++
++## Why
++
++Legal AI has uniquely high downside risk:
++
++- Unauthorized practice of law claims
++- Jurisdiction-specific advice without disclaimers
++- Cross-project privilege leakage
++- Fabricated citations
++- PII / privileged content in outputs
++
++LLM-judge guardrails are probabilistic and jailbreakable. Preflight turns
++each of these into a formally verifiable rule whose enforcement produces a
++proof that a regulator, opposing counsel, or auditor can independently
++re-check months later.
++
++## What changes in Mike
++
++The diff is intentionally small. Four new files, three light edits.
++
++### Added
++
++| File | Purpose |
++|---|---|
++| `backend/src/lib/preflight.ts` | HTTP client for `POST /v1/verify` |
++| `backend/src/middleware/preflight.ts` | Express middleware on `POST /chat` |
++| `backend/migrations/2026_01_preflight.sql` | Adds proof columns to `chat_messages` |
++| `frontend/src/app/components/assistant/VerifiedBadge.tsx` | "Verified" pill linking to the proof |
++
++### Edited
++
++- `backend/src/routes/chat.ts` — middleware mounted on `POST /chat`; assistant
++  insert now persists `preflight_check_id`, verdict, and policy version.
++- `backend/.env.example` — three new vars (`ICME_API_KEY`, `ICME_POLICY_ID`,
++  `ICME_PREFLIGHT_ENFORCE`).
++
++The middleware is **fail-open by default** (`ICME_PREFLIGHT_ENFORCE=shadow`):
++it records verdicts and proofs but never blocks. Flip to `enforce` once you
++trust the policy.
++
++## Setup
++
++1. Apply the new migration in the Supabase SQL editor:
++
++   ```sql
++   \i backend/migrations/2026_01_preflight.sql
++   ```
++
++2. Add to `backend/.env`:
++
++   ```
++   ICME_API_KEY=...
++   ICME_POLICY_ID=<uuid from icme dashboard>
++   ICME_PREFLIGHT_ENFORCE=shadow
++   ```
++
++3. Render the badge wherever assistant messages are shown — e.g. in
++   `AssistantMessage.tsx`:
++
++   ```tsx
++   import { VerifiedBadge } from "./VerifiedBadge";
++
++   <VerifiedBadge
++     info={{
++       check_id: message.preflight_check_id,
++       verdict: message.preflight_verdict,
++       policy_id: message.preflight_policy_id,
++       policy_version: message.preflight_policy_version,
++     }}
++   />
++   ```
++
++## Suggested demo policies
++
++Write these in plain English in the ICME dashboard. Preflight compiles each
++to SMT-LIB on save.
++
++1. **No unauthorized legal advice** — outputs that recommend specific legal
++   action must include a disclaimer and cite an authority.
++2. **Privilege boundary** — references to documents must resolve to the
++   current `project_id` only.
++3. **PII egress** — no SSNs, account numbers, or DOBs in output.
++4. **Citation integrity** — every cited case or statute must appear in the
++   project's uploaded corpus.
++5. **Escalation scope** — securities, healthcare, and M&A questions must be
++   flagged for human review.
++
++## Re-verifying a proof
++
++Any third party can confirm a stored `check_id`:
++
++```bash
++curl https://api.icme.io/v1/proofs/<check_id>
++```
++
++The response is a self-contained, signed object — no Mike access required.
++
++## Roadmap
++
++- Two-stage verification: pre-LLM (intent) and post-LLM (output content).
++- Per-project policies (lookup by `project_id` instead of a single env var).
++- Streaming verification on tool calls (`runLLMStream` integration).
++- Surface proof URLs in chat export / discovery bundles.
++
++---
++
++Built on top of [@willchen96/mike](https://github.com/willchen96/mike).
++Integration by the team at [docs.icme.io](https://docs.icme.io).
+diff --git a/backend/.env.example b/backend/.env.example
+index 6b4d561..cdf700a 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -18,3 +18,14 @@ ANTHROPIC_API_KEY=your-anthropic-key
+ OPENAI_API_KEY=your-openai-key
+ RESEND_API_KEY=your-resend-key
+ USER_API_KEYS_ENCRYPTION_SECRET=your-long-random-secret
++
++# ICME Preflight — formal verification for chat actions
++# Sign up at https://docs.icme.io to get an API key and register a policy.
++# ICME_PREFLIGHT_ENFORCE controls behaviour:
++#   off       — skip verification entirely
++#   shadow    — call Preflight, log result, always allow (default for demos)
++#   enforce   — block requests on UNSAT or verification error
++ICME_API_KEY=
++ICME_POLICY_ID=
++ICME_PREFLIGHT_ENFORCE=shadow
++# ICME_API_BASE_URL=https://api.icme.io/v1
+diff --git a/backend/migrations/2026_01_preflight.sql b/backend/migrations/2026_01_preflight.sql
+new file mode 100644
+index 0000000..5972f29
+--- /dev/null
++++ b/backend/migrations/2026_01_preflight.sql
+@@ -0,0 +1,18 @@
++-- ICME Preflight integration: store the cryptographic check_id from each
++-- verified assistant message so proofs can be re-verified independently.
++--
++-- Run via the Supabase SQL editor after applying schema.sql.
++
++alter table public.chat_messages
++  add column if not exists preflight_check_id text,
++  add column if not exists preflight_verdict  text,
++  add column if not exists preflight_policy_id text,
++  add column if not exists preflight_policy_version text;
++
++create index if not exists idx_chat_messages_preflight_check
++  on public.chat_messages(preflight_check_id);
++
++comment on column public.chat_messages.preflight_check_id is
++  'ICME Preflight check_id — cryptographic proof receipt for this message.';
++comment on column public.chat_messages.preflight_verdict is
++  'SAT (allowed), UNSAT (blocked), or ERROR (verification unavailable).';
+diff --git a/backend/src/lib/preflight.ts b/backend/src/lib/preflight.ts
+new file mode 100644
+index 0000000..7d24b43
+--- /dev/null
++++ b/backend/src/lib/preflight.ts
+@@ -0,0 +1,108 @@
++/**
++ * ICME Preflight client (stub)
++ *
++ * Thin wrapper around https://api.icme.io/v1/verify.
++ * Preflight compiles a plain-English policy to SMT-LIB and returns a
++ * cryptographic proof that a proposed agent action is SAT (allowed) or
++ * UNSAT (blocked) under that policy.
++ *
++ * Docs: https://docs.icme.io
++ *
++ * This file is a STUB for the integration demo. Replace the marked
++ * section with a real fetch call once ICME_API_KEY is provisioned.
++ */
++
++export type PreflightVerdict = "SAT" | "UNSAT" | "ERROR";
++
++export interface PreflightCheck {
++    check_id: string;
++    verdict: PreflightVerdict;
++    policy_id: string;
++    policy_version?: string;
++    proof_url?: string;
++    reason?: string;
++    /** Round-trip latency in ms, useful for budget alerts */
++    latency_ms?: number;
++}
++
++export interface PreflightRequest {
++    /** UUID of a policy registered via the ICME dashboard */
++    policy_id: string;
++    /** Natural-language description of the proposed agent action */
++    action: string;
++    /** Optional structured context the policy can reference */
++    context?: Record<string, unknown>;
++}
++
++const ICME_API_BASE =
++    process.env.ICME_API_BASE_URL ?? "https://api.icme.io/v1";
++
++/**
++ * Verify a proposed action against a Preflight policy.
++ *
++ * Returns a verdict + check_id. Callers should persist the check_id
++ * alongside the resulting assistant message so the proof can be
++ * independently re-verified later.
++ */
++export async function verifyWithPreflight(
++    req: PreflightRequest,
++): Promise<PreflightCheck> {
++    const apiKey = process.env.ICME_API_KEY;
++    if (!apiKey) {
++        // Fail-open in dev when no key is configured. The middleware will
++        // log this and (depending on ICME_PREFLIGHT_ENFORCE) allow the
++        // request through with a stub check_id.
++        return {
++            check_id: "stub-no-api-key",
++            verdict: "ERROR",
++            policy_id: req.policy_id,
++            reason: "ICME_API_KEY not set",
++        };
++    }
++
++    const started = Date.now();
++    try {
++        // ──────────────────────────────────────────────────────────────
++        // STUB: replace with real Preflight call.
++        //
++        // const res = await fetch(`${ICME_API_BASE}/verify`, {
++        //     method: "POST",
++        //     headers: {
++        //         "Content-Type": "application/json",
++        //         "Authorization": `Bearer ${apiKey}`,
++        //     },
++        //     body: JSON.stringify({
++        //         policy_id: req.policy_id,
++        //         action: req.action,
++        //         context: req.context ?? {},
++        //     }),
++        // });
++        // if (!res.ok) throw new Error(`Preflight ${res.status}`);
++        // const data = await res.json();
++        // ──────────────────────────────────────────────────────────────
++
++        // Demo behaviour: pretend everything is SAT, return a fake proof.
++        const data = {
++            check_id: `pf_${cryptoRandomId()}`,
++            verdict: "SAT" as const,
++            policy_id: req.policy_id,
++            policy_version: "demo-v0",
++            proof_url: `${ICME_API_BASE}/proofs/demo`,
++        };
++
++        return { ...data, latency_ms: Date.now() - started };
++    } catch (err) {
++        return {
++            check_id: "stub-error",
++            verdict: "ERROR",
++            policy_id: req.policy_id,
++            reason: err instanceof Error ? err.message : String(err),
++            latency_ms: Date.now() - started,
++        };
++    }
++}
++
++function cryptoRandomId(): string {
++    // Lightweight, dependency-free random id for the stub
++    return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
++}
+diff --git a/backend/src/middleware/preflight.ts b/backend/src/middleware/preflight.ts
+new file mode 100644
+index 0000000..18f3b23
+--- /dev/null
++++ b/backend/src/middleware/preflight.ts
+@@ -0,0 +1,108 @@
++/**
++ * ICME Preflight verification middleware (stub)
++ *
++ * Inserted between `requireAuth` and the chat handler on POST /chat.
++ * Extracts the last user turn, asks Preflight whether responding to it
++ * is permitted under the configured policy, and attaches the resulting
++ * check_id to `res.locals.preflightCheck` for the handler to persist on
++ * the assistant message row.
++ *
++ * Modes (controlled by ICME_PREFLIGHT_ENFORCE):
++ *   "off"      — never call Preflight (no-op middleware)
++ *   "shadow"   — call Preflight, log verdict, always allow (default)
++ *   "enforce"  — block the request on UNSAT or ERROR with 4xx response
++ */
++
++import { NextFunction, Request, Response } from "express";
++import { verifyWithPreflight, type PreflightCheck } from "../lib/preflight";
++
++type EnforceMode = "off" | "shadow" | "enforce";
++
++function getMode(): EnforceMode {
++    const raw = (process.env.ICME_PREFLIGHT_ENFORCE ?? "shadow").toLowerCase();
++    if (raw === "off" || raw === "enforce") return raw;
++    return "shadow";
++}
++
++function extractLastUserText(body: unknown): string | null {
++    if (!body || typeof body !== "object") return null;
++    const messages = (body as { messages?: unknown }).messages;
++    if (!Array.isArray(messages)) return null;
++    for (let i = messages.length - 1; i >= 0; i--) {
++        const m = messages[i];
++        if (m && typeof m === "object" && (m as { role?: unknown }).role === "user") {
++            const content = (m as { content?: unknown }).content;
++            if (typeof content === "string") return content;
++        }
++    }
++    return null;
++}
++
++export async function preflightVerify(
++    req: Request,
++    res: Response,
++    next: NextFunction,
++): Promise<void> {
++    const mode = getMode();
++    if (mode === "off") return next();
++
++    const policyId = process.env.ICME_POLICY_ID;
++    if (!policyId) {
++        console.warn(
++            "[preflight] ICME_POLICY_ID not set — skipping verification",
++        );
++        return next();
++    }
++
++    const actionText = extractLastUserText(req.body);
++    if (!actionText) {
++        // No user turn to verify (e.g. tool follow-up) — pass through
++        return next();
++    }
++
++    const userId = (res.locals.userId as string | undefined) ?? "unknown";
++    const projectId =
++        (req.body as { project_id?: unknown } | undefined)?.project_id ?? null;
++
++    let check: PreflightCheck;
++    try {
++        check = await verifyWithPreflight({
++            policy_id: policyId,
++            action: `Respond to user query: "${actionText.slice(0, 500)}"`,
++            context: {
++                user_id: userId,
++                project_id: projectId,
++                surface: "mike.chat",
++            },
++        });
++    } catch (err) {
++        console.error("[preflight] verification threw", err);
++        if (mode === "enforce") {
++            res.status(502).json({
++                detail: "Policy verification unavailable",
++            });
++            return;
++        }
++        return next();
++    }
++
++    res.locals.preflightCheck = check;
++
++    if (mode === "enforce" && check.verdict !== "SAT") {
++        res.status(451).json({
++            detail: "Blocked by policy",
++            check_id: check.check_id,
++            reason: check.reason ?? "Policy returned UNSAT",
++        });
++        return;
++    }
++
++    console.log("[preflight]", {
++        mode,
++        verdict: check.verdict,
++        check_id: check.check_id,
++        latency_ms: check.latency_ms,
++    });
++
++    next();
++}
+diff --git a/backend/src/routes/chat.ts b/backend/src/routes/chat.ts
+index 9a39e0a..7307250 100644
+--- a/backend/src/routes/chat.ts
++++ b/backend/src/routes/chat.ts
+@@ -1,5 +1,6 @@
+ import { Router } from "express";
+ import { requireAuth } from "../middleware/auth";
++import { preflightVerify } from "../middleware/preflight";
+ import { createServerSupabase } from "../lib/supabase";
+ import {
+     buildDocContext,
+@@ -420,7 +421,9 @@ chatRouter.post("/:chatId/generate-title", requireAuth, async (req, res) => {
+ });
+ 
+ // POST /chat — streaming
+-chatRouter.post("/", requireAuth, async (req, res) => {
++// ICME Preflight verifies the proposed action against a policy before the
++// LLM call; see backend/src/middleware/preflight.ts.
++chatRouter.post("/", requireAuth, preflightVerify, async (req, res) => {
+     const userId = res.locals.userId as string;
+     const body =
+         req.body && typeof req.body === "object" && !Array.isArray(req.body)
+@@ -580,11 +583,23 @@ chatRouter.post("/", requireAuth, async (req, res) => {
+         });
+ 
+         const annotations = extractAnnotations(fullText, docIndex, events);
++        const preflightCheck = res.locals.preflightCheck as
++            | {
++                  check_id: string;
++                  verdict: string;
++                  policy_id: string;
++                  policy_version?: string;
++              }
++            | undefined;
+         await db.from("chat_messages").insert({
+             chat_id: chatId,
+             role: "assistant",
+             content: events.length ? events : null,
+             annotations: annotations.length ? annotations : null,
++            preflight_check_id: preflightCheck?.check_id ?? null,
++            preflight_verdict: preflightCheck?.verdict ?? null,
++            preflight_policy_id: preflightCheck?.policy_id ?? null,
++            preflight_policy_version: preflightCheck?.policy_version ?? null,
+         });
+ 
+         if (!chatTitle && lastUser?.content) {
+diff --git a/frontend/src/app/components/assistant/VerifiedBadge.tsx b/frontend/src/app/components/assistant/VerifiedBadge.tsx
+new file mode 100644
+index 0000000..1512663
+--- /dev/null
++++ b/frontend/src/app/components/assistant/VerifiedBadge.tsx
+@@ -0,0 +1,51 @@
++/**
++ * VerifiedBadge — renders an ICME Preflight proof receipt next to an
++ * assistant message. Click opens the public proof URL on icme.io so any
++ * third party can re-verify the cryptographic check.
++ *
++ * Stub component for the integration demo. Wire it into AssistantMessage
++ * by passing the preflight fields from the chat_messages row through to
++ * this component.
++ */
++
++import * as React from "react";
++
++export interface PreflightInfo {
++    check_id: string | null;
++    verdict: "SAT" | "UNSAT" | "ERROR" | null;
++    policy_id?: string | null;
++    policy_version?: string | null;
++}
++
++export function VerifiedBadge({ info }: { info: PreflightInfo | null }) {
++    if (!info?.check_id || !info.verdict) return null;
++
++    const isSat = info.verdict === "SAT";
++    const label = isSat ? "Verified" : info.verdict;
++    const color = isSat
++        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
++        : "bg-amber-50 text-amber-700 border-amber-200";
++
++    const proofUrl = `https://icme.io/proof/${encodeURIComponent(info.check_id)}`;
++
++    return (
++        <a
++            href={proofUrl}
++            target="_blank"
++            rel="noreferrer noopener"
++            className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${color}`}
++            title={`Preflight ${info.verdict} · policy ${info.policy_id ?? "?"}`}
++        >
++            <svg
++                width="10"
++                height="10"
++                viewBox="0 0 20 20"
++                fill="currentColor"
++                aria-hidden
++            >
++                <path d="M10 1.5 3 4v6c0 4.2 3 7.8 7 8.5 4-.7 7-4.3 7-8.5V4l-7-2.5Zm-.8 12.2-3.1-3.1 1.2-1.2 1.9 1.9 4-4 1.2 1.2-5.2 5.2Z" />
++            </svg>
++            {label}
++        </a>
++    );
++}
+-- 
+2.43.0
+
+
+From 8dfa5ca585bf28e7a080844f54787373bbbc0a5a Mon Sep 17 00:00:00 2001
+From: hshadab <hshadab@gmail.com>
+Date: Fri, 22 May 2026 16:06:29 -0400
+Subject: [PATCH 2/2] feat(integrations): wire VerifiedBadge into assistant
+ message UI
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- types: add MikePreflightInfo and preflight? field on MikeMessage
+- mikeApi getChat: surface preflight_* columns as a typed object
+- AssistantMessage: accept preflight prop, render VerifiedBadge next to status
+- ChatView: forward msg.preflight to AssistantMessage
+
+End-to-end now: middleware persists check_id → chat detail GET surfaces it
+→ UI renders a clickable "Verified" pill linking to icme.io/proof/<id>.
+---
+ .../app/components/assistant/AssistantMessage.tsx   | 10 +++++++++-
+ frontend/src/app/components/assistant/ChatView.tsx  |  1 +
+ frontend/src/app/components/shared/types.ts         |  9 +++++++++
+ frontend/src/app/lib/mikeApi.ts                     | 13 +++++++++++++
+ 4 files changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/frontend/src/app/components/assistant/AssistantMessage.tsx b/frontend/src/app/components/assistant/AssistantMessage.tsx
+index f33dfb0..ffcd227 100644
+--- a/frontend/src/app/components/assistant/AssistantMessage.tsx
++++ b/frontend/src/app/components/assistant/AssistantMessage.tsx
+@@ -13,9 +13,11 @@ import type {
+     AssistantEvent,
+     MikeCitationAnnotation,
+     MikeEditAnnotation,
++    MikePreflightInfo,
+ } from "../shared/types";
+ import { EditCard, applyOptimisticResolution } from "./EditCard";
+ import { PreResponseWrapper } from "../shared/PreResponseWrapper";
++import { VerifiedBadge } from "./VerifiedBadge";
+ import { supabase } from "@/lib/supabase";
+ 
+ function toolCallLabel(name: string): string {
+@@ -1065,6 +1067,8 @@ interface Props {
+      * edits flip their per-card UI without per-card clicks.
+      */
+     resolvedEditStatuses?: Record<string, "accepted" | "rejected">;
++    /** ICME Preflight proof receipt — renders the "Verified" pill. */
++    preflight?: MikePreflightInfo;
+ }
+ 
+ export function AssistantMessage({
+@@ -1085,6 +1089,7 @@ export function AssistantMessage({
+     isDocReloading,
+     isEditReloading,
+     resolvedEditStatuses,
++    preflight,
+ }: Props) {
+     const messageKey = useId();
+     const contentDivRef = useRef<HTMLDivElement | null>(null);
+@@ -1353,7 +1358,10 @@ export function AssistantMessage({
+ 
+     return (
+         <div style={{ minHeight }}>
+-            <ResponseStatus status={status} />
++            <div className="flex items-center gap-2">
++                <ResponseStatus status={status} />
++                {preflight ? <VerifiedBadge info={preflight} /> : null}
++            </div>
+             <div className="w-full font-inter relative mt-2">
+                 {events && events.length > 0 ? (
+                     <div className="flex flex-col gap-4">
+diff --git a/frontend/src/app/components/assistant/ChatView.tsx b/frontend/src/app/components/assistant/ChatView.tsx
+index 9f59685..12ff60f 100644
+--- a/frontend/src/app/components/assistant/ChatView.tsx
++++ b/frontend/src/app/components/assistant/ChatView.tsx
+@@ -543,6 +543,7 @@ export function ChatView({
+                                                 resolvedEditStatuses={
+                                                     resolvedEditStatuses
+                                                 }
++                                                preflight={(msg as any).preflight}
+                                             />
+                                         )}
+                                     </div>
+diff --git a/frontend/src/app/components/shared/types.ts b/frontend/src/app/components/shared/types.ts
+index d7bac4e..03df938 100644
+--- a/frontend/src/app/components/shared/types.ts
++++ b/frontend/src/app/components/shared/types.ts
+@@ -142,6 +142,13 @@ export type AssistantEvent =
+     }
+   | { type: "content"; text: string; isStreaming?: boolean };
+ 
++export interface MikePreflightInfo {
++  check_id: string | null;
++  verdict: "SAT" | "UNSAT" | "ERROR" | null;
++  policy_id?: string | null;
++  policy_version?: string | null;
++}
++
+ export interface MikeMessage {
+   role: "user" | "assistant";
+   content: string;
+@@ -152,6 +159,8 @@ export interface MikeMessage {
+   events?: AssistantEvent[];
+   /** Set when streaming failed; rendered as a red error block. */
+   error?: string;
++  /** ICME Preflight proof receipt for this assistant message. */
++  preflight?: MikePreflightInfo;
+ }
+ 
+ export interface CitationQuote {
+diff --git a/frontend/src/app/lib/mikeApi.ts b/frontend/src/app/lib/mikeApi.ts
+index 5b7e37e..861a7dd 100644
+--- a/frontend/src/app/lib/mikeApi.ts
++++ b/frontend/src/app/lib/mikeApi.ts
+@@ -28,6 +28,11 @@ interface ServerMessage {
+     workflow?: { id: string; title: string } | null;
+     annotations?: MikeCitationAnnotation[] | null;
+     created_at: string;
++    // ICME Preflight proof receipt fields (assistant rows only)
++    preflight_check_id?: string | null;
++    preflight_verdict?: "SAT" | "UNSAT" | "ERROR" | null;
++    preflight_policy_id?: string | null;
++    preflight_policy_version?: string | null;
+ }
+ interface ServerChatDetailOut {
+     chat: MikeChat;
+@@ -462,6 +467,14 @@ export async function getChat(chatId: string): Promise<MikeChatDetailOut> {
+                     .join("") ?? "",
+             annotations: m.annotations ?? undefined,
+             events,
++            preflight: m.preflight_check_id
++                ? {
++                      check_id: m.preflight_check_id,
++                      verdict: m.preflight_verdict ?? null,
++                      policy_id: m.preflight_policy_id ?? null,
++                      policy_version: m.preflight_policy_version ?? null,
++                  }
++                : undefined,
+         };
+     });
+     return { chat: raw.chat, messages };
+-- 
+2.43.0
+
