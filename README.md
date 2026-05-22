@@ -103,7 +103,24 @@ real verdicts before flipping the switch.
 
 ## Demo
 
-A working reference implementation lives at
+### Standalone UI demo (no setup)
+
+Open [`demo/index.html`](./demo/index.html) in any browser. Single file,
+no build step, no backend. Try the three suggested prompts to see:
+
+- A **SAT** path — assistant answers, green "Verified" pill, click to see
+  the proof receipt.
+- An **UNSAT** path that the policy blocks (specific legal advice).
+- A second **UNSAT** path that catches PII egress (SSNs).
+
+The sidebar toggles between `off`, `shadow`, and `enforce` modes so you
+can see what each one does to the same prompt. Shadow mode is
+particularly useful for the demo — it shows the dangerous response *and*
+the verdict that would have blocked it in production.
+
+### Working reference implementation
+
+A patch-applied Mike checkout lives at
 [hshadab/mikeoss](https://github.com/hshadab/mikeoss) on the
 `feat/icme-preflight-verification` branch.
 

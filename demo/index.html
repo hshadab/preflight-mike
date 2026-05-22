@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mike + ICME Preflight · UI demo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif; }
+  .typing::after { content: "▋"; margin-left: 2px; opacity: .6; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .fade-in { animation: fade 280ms ease-out both; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .scroll-area::-webkit-scrollbar { width: 8px; }
+  .scroll-area::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+</style>
+</head>
+<body class="bg-neutral-50 text-neutral-900 h-screen overflow-hidden">
+
+<div class="h-full flex">
+  <!-- Sidebar (cosmetic, mimics Mike) -->
+  <aside class="w-64 border-r border-neutral-200 bg-white flex flex-col">
+    <div class="px-4 py-3 border-b border-neutral-200 flex items-center gap-2">
+      <div class="w-7 h-7 rounded-lg bg-neutral-900 text-white grid place-items-center font-bold text-sm">M</div>
+      <div class="font-semibold">Mike</div>
+      <span class="ml-auto text-[10px] uppercase tracking-wider text-neutral-500">OSS</span>
+    </div>
+
+    <div class="px-3 py-2 text-xs uppercase tracking-wider text-neutral-500">Project</div>
+    <div class="px-3 pb-2 text-sm font-medium">Acme Corp · NDA Review</div>
+
+    <div class="px-3 pt-3 text-xs uppercase tracking-wider text-neutral-500">Documents</div>
+    <ul class="px-2 pb-3 text-sm space-y-1">
+      <li class="px-2 py-1.5 rounded hover:bg-neutral-100 flex items-center gap-2">
+        <span class="w-4 h-4 rounded bg-rose-100 text-rose-700 text-[10px] grid place-items-center font-semibold">PDF</span>
+        NDA-Acme-v3.pdf
+      </li>
+      <li class="px-2 py-1.5 rounded hover:bg-neutral-100 flex items-center gap-2">
+        <span class="w-4 h-4 rounded bg-rose-100 text-rose-700 text-[10px] grid place-items-center font-semibold">PDF</span>
+        MSA-Acme-2026.pdf
+      </li>
+      <li class="px-2 py-1.5 rounded hover:bg-neutral-100 flex items-center gap-2">
+        <span class="w-4 h-4 rounded bg-blue-100 text-blue-700 text-[10px] grid place-items-center font-semibold">DOC</span>
+        Term-Sheet-draft.docx
+      </li>
+    </ul>
+
+    <div class="mt-auto p-3 border-t border-neutral-200 text-xs text-neutral-500">
+      <div class="font-medium text-neutral-700 mb-1">ICME Preflight</div>
+      <label class="flex items-center justify-between gap-2 cursor-pointer">
+        <span>Verification</span>
+        <span id="modeLabel" class="font-semibold text-emerald-700">ENFORCE</span>
+      </label>
+      <div class="mt-2 flex gap-1">
+        <button data-mode="off"     class="modeBtn flex-1 px-2 py-1 rounded border text-[11px]">off</button>
+        <button data-mode="shadow"  class="modeBtn flex-1 px-2 py-1 rounded border text-[11px]">shadow</button>
+        <button data-mode="enforce" class="modeBtn flex-1 px-2 py-1 rounded border text-[11px] bg-emerald-50 border-emerald-200 text-emerald-800">enforce</button>
+      </div>
+      <div class="mt-2 text-[10px] text-neutral-400">policy: legal-guardrails-v1</div>
+    </div>
+  </aside>
+
+  <!-- Chat -->
+  <main class="flex-1 flex flex-col">
+    <header class="px-6 py-3 border-b border-neutral-200 bg-white flex items-center gap-2">
+      <div class="text-sm">
+        <div class="font-medium">New chat</div>
+        <div class="text-xs text-neutral-500">claude-3-5-sonnet · verified by Preflight</div>
+      </div>
+      <div class="ml-auto flex items-center gap-2 text-xs text-neutral-500">
+        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5 3 4v6c0 4.2 3 7.8 7 8.5 4-.7 7-4.3 7-8.5V4l-7-2.5Zm-.8 12.2-3.1-3.1 1.2-1.2 1.9 1.9 4-4 1.2 1.2-5.2 5.2Z"/></svg>
+          Preflight ON
+        </span>
+      </div>
+    </header>
+
+    <div id="chat" class="flex-1 overflow-y-auto scroll-area px-6 py-6 space-y-6">
+      <!-- messages inserted here -->
+    </div>
+
+    <footer class="border-t border-neutral-200 bg-white px-6 py-4">
+      <div class="max-w-3xl mx-auto flex items-center gap-2">
+        <input id="prompt" type="text" placeholder="Ask Mike about your documents…"
+               class="flex-1 px-4 py-2.5 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900/10" />
+        <button id="send" class="px-4 py-2.5 rounded-xl bg-neutral-900 text-white text-sm font-medium hover:bg-neutral-800">Send</button>
+      </div>
+      <div class="max-w-3xl mx-auto mt-2 flex flex-wrap gap-2 text-xs">
+        <button class="suggest px-2 py-1 rounded-full border border-neutral-200 hover:bg-neutral-50"
+                data-q="Summarize the indemnification clause in NDA-Acme-v3.pdf">Indemnification summary</button>
+        <button class="suggest px-2 py-1 rounded-full border border-neutral-200 hover:bg-neutral-50"
+                data-q="Should I sue Acme Corp for $10M in damages?">Should I sue Acme for $10M?</button>
+        <button class="suggest px-2 py-1 rounded-full border border-neutral-200 hover:bg-neutral-50"
+                data-q="Pull the SSN of every employee mentioned in MSA-Acme-2026.pdf">Pull every SSN from the MSA</button>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<!-- Proof modal -->
+<div id="modal" class="hidden fixed inset-0 bg-black/30 grid place-items-center z-50">
+  <div class="bg-white rounded-2xl shadow-xl w-[520px] max-w-[92vw] p-6 fade-in">
+    <div class="flex items-start gap-3">
+      <div id="modalIcon" class="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 grid place-items-center">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5 3 4v6c0 4.2 3 7.8 7 8.5 4-.7 7-4.3 7-8.5V4l-7-2.5Zm-.8 12.2-3.1-3.1 1.2-1.2 1.9 1.9 4-4 1.2 1.2-5.2 5.2Z"/></svg>
+      </div>
+      <div class="flex-1">
+        <div class="text-xs uppercase tracking-wider text-neutral-500">ICME Preflight · proof receipt</div>
+        <div id="modalTitle" class="text-lg font-semibold mt-0.5">Verified — SAT</div>
+      </div>
+      <button id="modalClose" class="text-neutral-400 hover:text-neutral-700">✕</button>
+    </div>
+
+    <dl class="mt-4 text-sm">
+      <div class="flex justify-between py-2 border-t border-neutral-100">
+        <dt class="text-neutral-500">Policy</dt>
+        <dd id="modalPolicy" class="font-mono text-xs">legal-guardrails-v1 (v1.4)</dd>
+      </div>
+      <div class="flex justify-between py-2 border-t border-neutral-100">
+        <dt class="text-neutral-500">Verdict</dt>
+        <dd id="modalVerdict" class="font-semibold text-emerald-700">SAT</dd>
+      </div>
+      <div class="flex justify-between py-2 border-t border-neutral-100">
+        <dt class="text-neutral-500">check_id</dt>
+        <dd id="modalCheckId" class="font-mono text-xs">pf_xxxxxxxxxxxx</dd>
+      </div>
+      <div class="flex justify-between py-2 border-t border-neutral-100">
+        <dt class="text-neutral-500">Latency</dt>
+        <dd id="modalLatency" class="font-mono text-xs">42 ms</dd>
+      </div>
+      <div id="modalReasonRow" class="hidden py-2 border-t border-neutral-100">
+        <dt class="text-neutral-500 mb-1">Reason</dt>
+        <dd id="modalReason" class="text-sm text-neutral-800"></dd>
+      </div>
+    </dl>
+
+    <div class="mt-4 rounded-lg bg-neutral-900 text-neutral-100 px-3 py-2.5 text-[11px] font-mono overflow-x-auto">
+      <span class="text-neutral-400">$</span> curl https://api.icme.io/v1/proofs/<span id="modalCurlId">pf_xxx</span>
+    </div>
+
+    <p class="mt-3 text-xs text-neutral-500">
+      Self-contained, signed proof. Any third party can re-verify this
+      check months later — no Mike access required.
+    </p>
+  </div>
+</div>
+
+<script>
+const chatEl = document.getElementById("chat");
+const input  = document.getElementById("prompt");
+const sendBtn= document.getElementById("send");
+let mode = "enforce"; // off | shadow | enforce
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+const rid = () => "pf_" + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+
+function el(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
+function scrollDown() {
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function badgeHTML(state, checkId) {
+  if (state === "verifying") {
+    return `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-neutral-100 text-neutral-500 border-neutral-200">
+      <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor" class="animate-spin"><path d="M10 2a8 8 0 1 1-8 8h2a6 6 0 1 0 6-6V2Z"/></svg>
+      Verifying…
+    </span>`;
+  }
+  if (state === "blocked") {
+    return `<button data-check="${checkId}" class="proofBtn inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+      <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm3.5 11.4-1.1 1.1L10 12l-2.4 2.5-1.1-1.1L8.9 11 6.5 8.6l1.1-1.1L10 9.9l2.4-2.4 1.1 1.1L11.1 11l2.4 2.4Z"/></svg>
+      BLOCKED · UNSAT
+    </button>`;
+  }
+  if (state === "shadow") {
+    return `<button data-check="${checkId}" class="proofBtn inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+      <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5 3 4v6c0 4.2 3 7.8 7 8.5 4-.7 7-4.3 7-8.5V4l-7-2.5Z"/></svg>
+      Shadow · UNSAT (would block)
+    </button>`;
+  }
+  // verified SAT
+  return `<button data-check="${checkId}" class="proofBtn inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+    <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5 3 4v6c0 4.2 3 7.8 7 8.5 4-.7 7-4.3 7-8.5V4l-7-2.5Zm-.8 12.2-3.1-3.1 1.2-1.2 1.9 1.9 4-4 1.2 1.2-5.2 5.2Z"/></svg>
+    Verified
+  </button>`;
+}
+
+function addUserMessage(text) {
+  const node = el(`
+    <div class="flex justify-end fade-in">
+      <div class="max-w-[75%] bg-neutral-900 text-white px-4 py-2.5 rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap">${text.replace(/</g,"&lt;")}</div>
+    </div>
+  `);
+  chatEl.appendChild(node);
+  scrollDown();
+}
+
+function addAssistantShell() {
+  const id = "msg-" + Math.random().toString(36).slice(2,8);
+  const node = el(`
+    <div id="${id}" class="fade-in">
+      <div class="flex items-center gap-2 mb-1.5">
+        <div class="w-6 h-6 rounded-lg bg-neutral-900 text-white grid place-items-center text-[11px] font-bold">M</div>
+        <div class="text-xs text-neutral-500">Mike</div>
+        <div class="badge ml-1"></div>
+      </div>
+      <div class="body text-[15px] leading-relaxed text-neutral-800 whitespace-pre-wrap"></div>
+    </div>
+  `);
+  chatEl.appendChild(node);
+  scrollDown();
+  return node;
+}
+
+async function typeInto(el, text, ms=14) {
+  el.classList.add("typing");
+  for (let i = 0; i < text.length; i++) {
+    el.textContent += text[i];
+    if (i % 3 === 0) scrollDown();
+    await new Promise(r => setTimeout(r, ms));
+  }
+  el.classList.remove("typing");
+  scrollDown();
+}
+
+// ─── scenarios ──────────────────────────────────────────────────────────────
+const SCENARIOS = {
+  "Summarize the indemnification clause in NDA-Acme-v3.pdf": {
+    verdict: "SAT",
+    response:
+`The indemnification clause in NDA-Acme-v3.pdf (§9.2) is mutual and capped at fees paid in the 12 months preceding the claim. Key points:
+
+• Each party indemnifies the other for third-party IP infringement claims arising from their own materials.
+• The cap excludes gross negligence, willful misconduct, and breach of confidentiality.
+• Notice must be given within 30 days of the indemnified party becoming aware of the claim.
+
+This is standard for a mutual NDA between commercial counterparties of comparable size. [cite §9.2]`,
+    policy: "legal-guardrails-v1 (v1.4)",
+  },
+
+  "Should I sue Acme Corp for $10M in damages?": {
+    verdict: "UNSAT",
+    reason: "Output would contain jurisdiction-specific legal advice without an authorized-counsel disclaimer or cited authority. Policy rule: no_unauthorized_legal_advice.",
+    blockedResponse:
+`I can't generate that response. The configured policy blocks specific legal-action recommendations without an attorney disclaimer and cited authority.
+
+The cryptographic proof of this block is attached to this message and can be re-verified independently.`,
+    shadowResponse:
+`You should absolutely sue. Based on §9.2 of the NDA, Acme's breach is material and you'd likely recover full damages plus fees in a Delaware Chancery action. File before the 30-day notice window closes.
+
+⚠ In shadow mode this response was delivered, but Preflight flagged it UNSAT — in enforce mode the user would never have seen it.`,
+    policy: "legal-guardrails-v1 (v1.4)",
+  },
+
+  "Pull the SSN of every employee mentioned in MSA-Acme-2026.pdf": {
+    verdict: "UNSAT",
+    reason: "Output would contain Social Security Numbers. Policy rule: no_pii_egress.",
+    blockedResponse:
+`I can't generate that response. The configured policy blocks any output containing Social Security Numbers, account numbers, or DOBs.
+
+The cryptographic proof of this block is attached to this message and can be re-verified independently.`,
+    shadowResponse:
+`Found 3 employees with SSNs in MSA-Acme-2026.pdf: Jane Doe (123-45-6789), John Smith (987-65-4321), Maria Garcia (555-12-3456).
+
+⚠ In shadow mode this response was delivered, but Preflight flagged it UNSAT — in enforce mode this PII would never have left the server.`,
+    policy: "legal-guardrails-v1 (v1.4)",
+  },
+};
+
+// ─── flow ───────────────────────────────────────────────────────────────────
+async function ask(q) {
+  if (!q.trim()) return;
+  sendBtn.disabled = true;
+  input.value = "";
+
+  addUserMessage(q);
+
+  const scenario = SCENARIOS[q] ?? {
+    verdict: "SAT",
+    response: "I've received your question and would normally answer here. This demo only ships canned responses — try one of the suggested prompts below the input box to see the full Preflight flow.",
+    policy: "legal-guardrails-v1 (v1.4)",
+  };
+
+  const shell = addAssistantShell();
+  const badgeSlot = shell.querySelector(".badge");
+  const body = shell.querySelector(".body");
+
+  if (mode !== "off") {
+    badgeSlot.innerHTML = badgeHTML("verifying");
+    await new Promise(r => setTimeout(r, 600 + Math.random()*200));
+  }
+
+  const checkId = rid();
+  let finalState;
+  let responseText;
+
+  if (mode === "off") {
+    finalState = null;
+    responseText = scenario.shadowResponse ?? scenario.response;
+  } else if (scenario.verdict === "SAT") {
+    finalState = "verified";
+    responseText = scenario.response;
+  } else if (mode === "enforce") {
+    finalState = "blocked";
+    responseText = scenario.blockedResponse;
+  } else {
+    // shadow + UNSAT — response goes through but flagged
+    finalState = "shadow";
+    responseText = scenario.shadowResponse;
+  }
+
+  if (finalState) {
+    badgeSlot.innerHTML = badgeHTML(finalState, checkId);
+    // stash data for the modal
+    badgeSlot.firstElementChild.dataset.verdict = scenario.verdict;
+    badgeSlot.firstElementChild.dataset.policy  = scenario.policy;
+    badgeSlot.firstElementChild.dataset.reason  = scenario.reason ?? "";
+    badgeSlot.firstElementChild.dataset.state   = finalState;
+  } else {
+    badgeSlot.innerHTML = `<span class="text-[11px] text-neutral-400 italic">verification off</span>`;
+  }
+
+  await typeInto(body, responseText, finalState === "blocked" ? 8 : 12);
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// ─── modal ──────────────────────────────────────────────────────────────────
+const modal = document.getElementById("modal");
+document.body.addEventListener("click", (e) => {
+  const btn = e.target.closest(".proofBtn");
+  if (btn) {
+    const state   = btn.dataset.state;
+    const checkId = btn.dataset.check;
+    const verdict = btn.dataset.verdict;
+    const reason  = btn.dataset.reason;
+    const policy  = btn.dataset.policy;
+
+    document.getElementById("modalCheckId").textContent = checkId;
+    document.getElementById("modalCurlId").textContent  = checkId;
+    document.getElementById("modalPolicy").textContent  = policy;
+    document.getElementById("modalLatency").textContent = (28 + Math.floor(Math.random()*60)) + " ms";
+
+    const verdictEl = document.getElementById("modalVerdict");
+    const iconEl    = document.getElementById("modalIcon");
+    const titleEl   = document.getElementById("modalTitle");
+
+    if (verdict === "SAT") {
+      verdictEl.textContent = "SAT (allowed)";
+      verdictEl.className = "font-semibold text-emerald-700";
+      iconEl.className = "w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 grid place-items-center";
+      titleEl.textContent = "Verified — SAT";
+    } else if (state === "shadow") {
+      verdictEl.textContent = "UNSAT (shadow — not blocked)";
+      verdictEl.className = "font-semibold text-amber-700";
+      iconEl.className = "w-9 h-9 rounded-lg bg-amber-50 text-amber-700 grid place-items-center";
+      titleEl.textContent = "Shadow verdict — would block in enforce mode";
+    } else {
+      verdictEl.textContent = "UNSAT (blocked)";
+      verdictEl.className = "font-semibold text-rose-700";
+      iconEl.className = "w-9 h-9 rounded-lg bg-rose-50 text-rose-700 grid place-items-center";
+      titleEl.textContent = "Blocked by policy";
+    }
+
+    const reasonRow = document.getElementById("modalReasonRow");
+    if (reason) {
+      reasonRow.classList.remove("hidden");
+      reasonRow.classList.add("border-t", "border-neutral-100");
+      document.getElementById("modalReason").textContent = reason;
+    } else {
+      reasonRow.classList.add("hidden");
+    }
+
+    modal.classList.remove("hidden");
+  }
+  if (e.target.id === "modalClose" || e.target === modal) {
+    modal.classList.add("hidden");
+  }
+});
+
+// ─── mode switcher ──────────────────────────────────────────────────────────
+const modeLabel = document.getElementById("modeLabel");
+document.querySelectorAll(".modeBtn").forEach(b => b.addEventListener("click", () => {
+  mode = b.dataset.mode;
+  document.querySelectorAll(".modeBtn").forEach(x => x.className =
+    "modeBtn flex-1 px-2 py-1 rounded border text-[11px]");
+  if (mode === "enforce") b.className += " bg-emerald-50 border-emerald-200 text-emerald-800";
+  if (mode === "shadow")  b.className += " bg-amber-50 border-amber-200 text-amber-800";
+  if (mode === "off")     b.className += " bg-neutral-100 border-neutral-200 text-neutral-600";
+  modeLabel.textContent = mode.toUpperCase();
+  modeLabel.className =
+    mode === "enforce" ? "font-semibold text-emerald-700"
+    : mode === "shadow" ? "font-semibold text-amber-700"
+    : "font-semibold text-neutral-500";
+}));
+
+// ─── wiring ─────────────────────────────────────────────────────────────────
+sendBtn.addEventListener("click", () => ask(input.value));
+input.addEventListener("keydown", e => { if (e.key === "Enter") ask(input.value); });
+document.querySelectorAll(".suggest").forEach(b =>
+  b.addEventListener("click", () => ask(b.dataset.q)));
+</script>
+</body>
+</html>
