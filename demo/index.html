@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Mike + ICME Preflight · UI demo</title>
+<link rel="icon" href="data:," />
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
@@ -14,12 +15,289 @@
   @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   .scroll-area::-webkit-scrollbar { width: 8px; }
   .scroll-area::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+
+  /* fake cursor */
+  #fakeCursor {
+    position: fixed; top: 0; left: 0; width: 22px; height: 22px;
+    pointer-events: none; z-index: 90;
+    transform: translate3d(-100px,-100px,0);
+    transition: transform 1800ms cubic-bezier(.4,.1,.2,1);
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.25));
+  }
+  #fakeCursor svg { width: 100%; height: 100%; }
+  #fakeCursor.click::after {
+    content:""; position: absolute; left: 50%; top: 50%;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid rgba(16,185,129,.85);
+    transform: translate(-50%,-50%) scale(.4);
+    animation: clickPulse 500ms ease-out forwards;
+  }
+  @keyframes clickPulse {
+    0%   { transform: translate(-50%,-50%) scale(.4); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(1.6); opacity: 0; }
+  }
+
+  /* legacy floating caption + callout — kept hidden; narration is in the sidebar */
+  #caption { display: none !important; }
+  .callout { display: none !important; }
+
+  /* highlight ring around annotated element */
+  .highlight-ring {
+    position: fixed; z-index: 84; pointer-events: none;
+    border-radius: 8px;
+    border: 2px dashed rgba(16,185,129,.9);
+    background: transparent;
+    opacity: 0; transition: opacity 220ms ease;
+  }
+  .highlight-ring.tone-block { border-color: rgba(244,63,94,.9); }
+  .highlight-ring.tone-info  { border-color: rgba(99,102,241,.9); }
+  .highlight-ring.visible { opacity: 1; }
+
+  /* policy preamble card */
+  #policyCard {
+    position: fixed; inset: 0; z-index: 95;
+    background: rgba(17,24,39,.78);
+    display: none;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  #policyCard.show { display: flex; }
+  #policyCard .card {
+    width: 560px; max-width: 92vw;
+    background: #fff; color: #111827;
+    border-radius: 4px;
+    border-left: 4px solid #10b981;
+    padding: 24px 26px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.35);
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 300ms ease, transform 300ms ease;
+  }
+  #policyCard.show .card { opacity: 1; transform: none; }
+  #policyCard .eyebrow {
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: #6b7280; font-weight: 600;
+  }
+  #policyCard h2 {
+    font-size: 22px; font-weight: 700; margin-top: 4px; margin-bottom: 2px;
+  }
+  #policyCard .uuid {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px; color: #9ca3af;
+  }
+  #policyCard .section {
+    margin-top: 18px;
+    font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    color: #6b7280; font-weight: 600;
+  }
+  #policyCard ul {
+    margin-top: 6px; padding-left: 0; list-style: none;
+    border-left: 2px solid #d1d5db; padding-left: 14px;
+  }
+  #policyCard li {
+    font-size: 14px; line-height: 1.5; color: #1f2937; margin: 6px 0;
+  }
+  #policyCard .meta {
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid #e5e7eb;
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: #6b7280;
+  }
+  #policyCard .meta code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #f3f4f6; padding: 2px 6px; border-radius: 3px; color: #374151;
+  }
+
+  /* end card */
+  #endCard {
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, rgba(6,78,59,.92), rgba(17,24,39,.92));
+    color: #fff;
+    display: none;
+    z-index: 100;
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 18px;
+    backdrop-filter: blur(6px);
+  }
+  #endCard.show { display: flex; }
+  #endCard h1 { font-size: 38px; font-weight: 700; letter-spacing: -.02em; }
+  #endCard p  { font-size: 18px; color: #d1fae5; }
+  #endCard code { background: rgba(255,255,255,.12); padding: 6px 14px; border-radius: 999px; font-size: 16px; }
+  #replayBtn {
+    margin-top: 8px;
+    padding: 10px 22px; border-radius: 9999px;
+    background: #fff; color: #064e3b; font-weight: 600;
+    cursor: pointer; border: 0;
+    transition: transform 200ms ease, background 200ms ease;
+  }
+  #replayBtn:hover { transform: scale(1.03); }
+
+  /* progress bar */
+  #progress {
+    position: fixed; left: 0; right: 0; top: 0; height: 3px; z-index: 70;
+    background: rgba(0,0,0,.04);
+  }
+  #progress > div {
+    height: 100%; width: 0;
+    background: linear-gradient(90deg,#059669,#10b981);
+    transition: width 200ms linear;
+  }
+
+  /* action label above assistant messages */
+  .action-label {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px; color: #6b7280;
+    margin-left: 32px; margin-bottom: 6px;
+    border-left: 2px solid #d1d5db; padding-left: 8px;
+    line-height: 1.45;
+  }
+  .action-label .k { color: #374151; font-weight: 600; }
+  .action-label .v { color: #1f2937; }
+
+  /* redacted "would-be" response */
+  .redacted-block {
+    position: relative;
+    margin-top: 6px; margin-bottom: 10px;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .redacted-block .draft {
+    padding: 12px 14px;
+    background: #fff7f7;
+    color: #1f2937;
+    filter: blur(3.5px);
+    user-select: none;
+    pointer-events: none;
+    font-size: 14px; line-height: 1.55;
+    white-space: pre-wrap;
+  }
+  .redacted-block .stamp {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 4px;
+    background: rgba(255,255,255,.35);
+  }
+  .redacted-block .stamp .label {
+    background: #f43f5e; color: #fff;
+    padding: 4px 12px; border-radius: 3px;
+    font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(244,63,94,.35);
+  }
+  .redacted-block .stamp .reason {
+    background: rgba(17,24,39,.9); color: #fff;
+    padding: 6px 12px; border-radius: 3px;
+    font-size: 11.5px; font-weight: 500;
+    max-width: 80%; text-align: center; line-height: 1.4;
+  }
+
+  /* auditor replay scene (browser-window simulation) */
+  #auditorScene {
+    position: fixed; inset: 0; z-index: 96;
+    background: #1f2937;
+    display: none;
+    align-items: center; justify-content: center;
+    flex-direction: column;
+    opacity: 0; transition: opacity 400ms ease;
+  }
+  #auditorScene.show { display: flex; opacity: 1; }
+  #auditorScene .meta {
+    color: #9ca3af; font-size: 11px; letter-spacing: .08em;
+    text-transform: uppercase; margin-bottom: 14px; font-weight: 600;
+  }
+  #auditorScene .browser {
+    width: 640px; max-width: 92vw;
+    background: #fff; border-radius: 6px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.45);
+    overflow: hidden;
+  }
+  #auditorScene .chrome {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: #e5e7eb; border-bottom: 1px solid #d1d5db;
+  }
+  #auditorScene .dots { display: flex; gap: 6px; }
+  #auditorScene .dots span {
+    width: 11px; height: 11px; border-radius: 50%;
+  }
+  #auditorScene .dots .d1 { background: #ef4444; }
+  #auditorScene .dots .d2 { background: #f59e0b; }
+  #auditorScene .dots .d3 { background: #22c55e; }
+  #auditorScene .urlbar {
+    flex: 1; background: #fff; border: 1px solid #cbd5e1;
+    border-radius: 3px; padding: 4px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; color: #1f2937;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #auditorScene .urlbar .lock { color: #16a34a; font-size: 10px; }
+  #auditorScene .page { padding: 22px 26px 26px; }
+  #auditorScene .eyebrow {
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: #6b7280; font-weight: 600;
+  }
+  #auditorScene .page h2 {
+    font-size: 20px; font-weight: 700; margin-top: 2px; margin-bottom: 10px;
+  }
+  #auditorScene .row {
+    display: flex; justify-content: space-between;
+    padding: 8px 0; border-top: 1px solid #f3f4f6;
+    font-size: 13px;
+  }
+  #auditorScene .row dt { color: #6b7280; }
+  #auditorScene .row dd { color: #111827; font-weight: 500; }
+  #auditorScene .row dd.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+  #auditorScene .row dd.unsat { color: #be123c; font-weight: 700; }
+  #auditorScene .reason-box {
+    margin-top: 10px; padding: 10px 12px;
+    background: #fff1f2; border-left: 3px solid #f43f5e;
+    border-radius: 3px;
+    font-size: 12.5px; color: #1f2937; line-height: 1.5;
+  }
+  #auditorScene .footer {
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid #e5e7eb;
+    font-size: 11px; color: #6b7280;
+    display: flex; justify-content: space-between;
+  }
+  #auditorScene .footer .verified-tag {
+    color: #15803d; font-weight: 600;
+  }
+
+  /* sidebar narration items */
+  #narrationCurrent.visible { color: #fff; }
+  #narrationCurrent:empty::before { content: "—"; color: #6b7280; }
+  .nrow { display: flex; gap: 8px; align-items: flex-start; }
+  .nrow .dot {
+    flex: 0 0 auto; width: 6px; height: 6px; border-radius: 9999px;
+    margin-top: 6px; background: #10b981;
+  }
+  .nrow.tone-block .dot { background: #f43f5e; }
+  .nrow.tone-info  .dot { background: #6366f1; }
+  .nrow .txt { color: #e5e7eb; }
+
+  /* paused indicator */
+  #pausedOverlay {
+    position: fixed; top: 14px; right: 18px; z-index: 95;
+    background: #111827; color: #fff;
+    padding: 6px 14px; border-radius: 3px;
+    border-left: 3px solid #f59e0b;
+    font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
+    font-weight: 700;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  }
+  #pausedOverlay.show { display: block; }
+  #pausedOverlay .hint {
+    margin-left: 8px; font-weight: 500;
+    color: #d1d5db; letter-spacing: 0; text-transform: none;
+  }
 </style>
 </head>
 <body class="bg-neutral-50 text-neutral-900 h-screen overflow-hidden">
 
+<div id="progress"><div></div></div>
+<div id="pausedOverlay">▍▍ Paused <span class="hint">press space to resume</span></div>
+
 <div class="h-full flex">
-  <!-- Sidebar (cosmetic, mimics Mike) -->
+  <!-- Sidebar -->
   <aside class="w-64 border-r border-neutral-200 bg-white flex flex-col">
     <div class="px-4 py-3 border-b border-neutral-200 flex items-center gap-2">
       <div class="w-7 h-7 rounded-lg bg-neutral-900 text-white grid place-items-center font-bold text-sm">M</div>
@@ -46,27 +324,31 @@
       </li>
     </ul>
 
-    <div class="mt-auto p-3 border-t border-neutral-200 text-xs text-neutral-500">
+    <div id="narration" class="mt-auto border-t border-neutral-200 bg-neutral-900 text-white">
+      <div class="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider opacity-60">Narration</div>
+      <div id="narrationCurrent" class="px-3 pb-2 text-xs leading-relaxed font-medium min-h-[2.5rem]"></div>
+      <div id="narrationCallouts" class="px-3 pb-3 space-y-1.5 text-[11px] leading-snug"></div>
+    </div>
+
+    <div class="p-3 border-t border-neutral-200 text-xs text-neutral-500">
       <div class="font-medium text-neutral-700 mb-1">ICME Preflight</div>
-      <label class="flex items-center justify-between gap-2 cursor-pointer">
+      <div class="flex items-center justify-between gap-2">
         <span>Verification</span>
         <span id="modeLabel" class="font-semibold text-emerald-700">ENFORCE</span>
-      </label>
-      <div class="mt-2 flex gap-1">
-        <button data-mode="off"     class="modeBtn flex-1 px-2 py-1 rounded border text-[11px]">off</button>
-        <button data-mode="shadow"  class="modeBtn flex-1 px-2 py-1 rounded border text-[11px]">shadow</button>
-        <button data-mode="enforce" class="modeBtn flex-1 px-2 py-1 rounded border text-[11px] bg-emerald-50 border-emerald-200 text-emerald-800">enforce</button>
       </div>
       <div class="mt-2 text-[10px] text-neutral-400">policy: legal-guardrails-v1</div>
     </div>
   </aside>
 
   <!-- Chat -->
-  <main class="flex-1 flex flex-col">
+  <main class="flex-1 flex flex-col relative">
     <header class="px-6 py-3 border-b border-neutral-200 bg-white flex items-center gap-2">
       <div class="text-sm">
-        <div class="font-medium">New chat</div>
-        <div class="text-xs text-neutral-500">claude-3-5-sonnet · verified by Preflight</div>
+        <div class="font-medium flex items-center gap-2">
+          <span>Smith v. Acme</span>
+          <span class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 border border-neutral-200">Project</span>
+        </div>
+        <div class="text-xs text-neutral-500">247 docs · matter scope enforced · claude-3-5-sonnet</div>
       </div>
       <div class="ml-auto flex items-center gap-2 text-xs text-neutral-500">
         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -76,23 +358,14 @@
       </div>
     </header>
 
-    <div id="chat" class="flex-1 overflow-y-auto scroll-area px-6 py-6 space-y-6">
-      <!-- messages inserted here -->
-    </div>
+    <div id="chat" class="flex-1 overflow-y-auto scroll-area px-6 pt-6 pb-32 space-y-6"></div>
 
     <footer class="border-t border-neutral-200 bg-white px-6 py-4">
       <div class="max-w-3xl mx-auto flex items-center gap-2">
         <input id="prompt" type="text" placeholder="Ask Mike about your documents…"
+               disabled
                class="flex-1 px-4 py-2.5 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900/10" />
-        <button id="send" class="px-4 py-2.5 rounded-xl bg-neutral-900 text-white text-sm font-medium hover:bg-neutral-800">Send</button>
-      </div>
-      <div class="max-w-3xl mx-auto mt-2 flex flex-wrap gap-2 text-xs">
-        <button class="suggest px-2 py-1 rounded-full border border-neutral-200 hover:bg-neutral-50"
-                data-q="Summarize the indemnification clause in NDA-Acme-v3.pdf">Indemnification summary</button>
-        <button class="suggest px-2 py-1 rounded-full border border-neutral-200 hover:bg-neutral-50"
-                data-q="Should I sue Acme Corp for $10M in damages?">Should I sue Acme for $10M?</button>
-        <button class="suggest px-2 py-1 rounded-full border border-neutral-200 hover:bg-neutral-50"
-                data-q="Pull the SSN of every employee mentioned in MSA-Acme-2026.pdf">Pull every SSN from the MSA</button>
+        <button id="send" disabled class="px-4 py-2.5 rounded-xl bg-neutral-900 text-white text-sm font-medium opacity-70">Send</button>
       </div>
     </footer>
   </main>
@@ -109,21 +382,25 @@
         <div class="text-xs uppercase tracking-wider text-neutral-500">ICME Preflight · proof receipt</div>
         <div id="modalTitle" class="text-lg font-semibold mt-0.5">Verified — SAT</div>
       </div>
-      <button id="modalClose" class="text-neutral-400 hover:text-neutral-700">✕</button>
     </div>
 
     <dl class="mt-4 text-sm">
-      <div class="flex justify-between py-2 border-t border-neutral-100">
-        <dt class="text-neutral-500">Policy</dt>
-        <dd id="modalPolicy" class="font-mono text-xs">legal-guardrails-v1 (v1.4)</dd>
+      <div class="py-2 border-t border-neutral-100">
+        <div class="flex justify-between">
+          <dt class="text-neutral-500">Policy</dt>
+          <dd id="modalPolicy" class="font-medium text-neutral-800">legal-guardrails-v1</dd>
+        </div>
+        <div class="text-right font-mono text-[10px] text-neutral-400 mt-0.5" id="modalPolicyId">8c2a4f9d-1b3e-4a7c-9d5f-2e8b1c4f7a3d</div>
       </div>
       <div class="flex justify-between py-2 border-t border-neutral-100">
         <dt class="text-neutral-500">Verdict</dt>
         <dd id="modalVerdict" class="font-semibold text-emerald-700">SAT</dd>
       </div>
-      <div class="flex justify-between py-2 border-t border-neutral-100">
-        <dt class="text-neutral-500">check_id</dt>
-        <dd id="modalCheckId" class="font-mono text-xs">pf_xxxxxxxxxxxx</dd>
+      <div id="modalCheckIdRow" class="py-2 border-t border-neutral-100">
+        <div class="flex justify-between">
+          <dt class="text-neutral-500">check_id</dt>
+          <dd id="modalCheckId" class="font-mono text-[11px] text-neutral-800">90484dac-f41e-47ee-9758-a2f63a4900b7</dd>
+        </div>
       </div>
       <div class="flex justify-between py-2 border-t border-neutral-100">
         <dt class="text-neutral-500">Latency</dt>
@@ -135,25 +412,181 @@
       </div>
     </dl>
 
-    <div class="mt-4 rounded-lg bg-neutral-900 text-neutral-100 px-3 py-2.5 text-[11px] font-mono overflow-x-auto">
-      <span class="text-neutral-400">$</span> curl https://api.icme.io/v1/proofs/<span id="modalCurlId">pf_xxx</span>
+    <div id="modalCurlBox" class="mt-4 rounded-lg bg-neutral-900 text-neutral-100 px-3 py-2.5 text-[10.5px] font-mono overflow-x-auto leading-relaxed whitespace-pre">
+<span class="text-neutral-400">$</span> curl -X POST https://api.icme.io/v1/verifyPaid \
+  -H 'Content-Type: application/json' \
+  -d '{"policy_id":"<span id="modalCurlPolicy">…</span>",
+       "action":"<span id="modalCurlAction">…</span>"}'
+
+<span class="text-emerald-400">→</span> { "check_id": "<span id="modalCurlId">…</span>",
+    "action": "<span id="modalCurlVerdict">…</span>" }
     </div>
 
     <p class="mt-3 text-xs text-neutral-500">
-      Self-contained, signed proof. Any third party can re-verify this
-      check months later — no Mike access required.
+      Self-contained, signed proof. Any third party can re-verify this check months later — no Mike access required.
     </p>
   </div>
 </div>
 
-<script>
-const chatEl = document.getElementById("chat");
-const input  = document.getElementById("prompt");
-const sendBtn= document.getElementById("send");
-let mode = "enforce"; // off | shadow | enforce
+<!-- Floating UI -->
+<div id="fakeCursor">
+  <svg viewBox="0 0 20 20" fill="#111827">
+    <path d="M2 2 L18 10 L10 11 L7 18 Z" stroke="#fff" stroke-width="1"/>
+  </svg>
+</div>
 
+<div id="caption"></div>
+
+<!-- Policy preamble card -->
+<div id="policyCard">
+  <div class="card">
+    <div class="eyebrow">ICME Preflight · Policy in force</div>
+    <h2>legal-guardrails-v1</h2>
+    <div class="uuid">policy_id: 8c2a4f9d-1b3e-4a7c-9d5f-2e8b1c4f7a3d</div>
+
+    <div class="section">Plain English</div>
+    <ul>
+      <li>Mike may answer questions about documents in the current matter.</li>
+      <li>Every cited document must resolve to this project's corpus (citation integrity).</li>
+      <li>No specific legal advice without an authorized-counsel disclaimer and a cited authority.</li>
+      <li>No PII (SSNs, account numbers, DOBs) in output.</li>
+    </ul>
+
+    <div class="meta">
+      <span>Compiled to <code>SMT-LIB</code></span>
+      <span>Verified via <code>POST /v1/verifyPaid</code></span>
+    </div>
+  </div>
+</div>
+
+<!-- Auditor replay scene -->
+<div id="auditorScene">
+  <div class="meta">6 months later · different machine · no firm access</div>
+  <div class="browser">
+    <div class="chrome">
+      <div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+      <div class="urlbar"><span class="lock">🔒</span><span id="auditorUrl">https://icme.io/proofs/—</span></div>
+    </div>
+    <div class="page">
+      <div class="eyebrow">ICME Preflight · proof receipt</div>
+      <h2 id="auditorTitle">Blocked by policy</h2>
+      <dl>
+        <div class="row"><dt>check_id</dt><dd class="mono" id="auditorCheckId">—</dd></div>
+        <div class="row"><dt>policy_id</dt><dd class="mono" id="auditorPolicyId">—</dd></div>
+        <div class="row"><dt>policy</dt><dd id="auditorPolicy">—</dd></div>
+        <div class="row"><dt>verdict</dt><dd class="unsat" id="auditorVerdict">UNSAT</dd></div>
+        <div class="row"><dt>verified_at</dt><dd class="mono" id="auditorTime">—</dd></div>
+      </dl>
+      <div class="reason-box" id="auditorReason">—</div>
+      <div class="footer">
+        <span>Re-verified independently · no Mike access · no model access</span>
+        <span class="verified-tag">✓ signature valid</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="endCard"
+  <p class="opacity-80 uppercase tracking-widest text-sm">drop-in integration</p>
+  <h1>Mike + ICME Preflight</h1>
+  <p>Cryptographically verified legal AI · 4 files · MIT licensed</p>
+  <code>github.com/hshadab/preflight-mike</code>
+  <button id="replayBtn">▶ Replay</button>
+</div>
+
+<script>
 // ─── helpers ────────────────────────────────────────────────────────────────
-const rid = () => "pf_" + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+const chatEl = document.getElementById("chat");
+const captionEl = document.getElementById("caption");
+const progressBar = document.querySelector("#progress > div");
+const cursorEl = document.getElementById("fakeCursor");
+const pausedOverlay = document.getElementById("pausedOverlay");
+
+const SPEED = 2; // 2x slower pacing for the whole demo
+
+// ─── pause/resume ───────────────────────────────────────────────────────────
+let paused = false;
+const pendingWaits = new Set(); // { resolve, remainingMs, timerId, startedAt }
+let lastCursorTarget = null;
+let pauseStartedAt = 0;
+let totalPausedMs = 0;
+
+function wait(ms) {
+  const totalMs = ms * SPEED;
+  return new Promise(resolve => {
+    const entry = { resolve, remainingMs: totalMs, timerId: null, startedAt: 0 };
+    const arm = (delay) => {
+      entry.startedAt = performance.now();
+      entry.remainingMs = delay;
+      entry.timerId = setTimeout(() => {
+        pendingWaits.delete(entry);
+        resolve();
+      }, delay);
+    };
+    pendingWaits.add(entry);
+    if (paused) {
+      // queued; will be armed on resume
+      entry.timerId = null;
+    } else {
+      arm(totalMs);
+    }
+    entry._arm = arm; // expose for resume
+  });
+}
+
+function pauseDemo() {
+  if (paused) return;
+  paused = true;
+  pauseStartedAt = performance.now();
+  // freeze pending waits
+  for (const e of pendingWaits) {
+    if (e.timerId != null) {
+      clearTimeout(e.timerId);
+      const elapsed = performance.now() - e.startedAt;
+      e.remainingMs = Math.max(0, e.remainingMs - elapsed);
+      e.timerId = null;
+    }
+  }
+  // freeze cursor mid-transition
+  const cs = getComputedStyle(cursorEl);
+  cursorEl.style.transition = "none";
+  cursorEl.style.transform = cs.transform;
+  pausedOverlay.classList.add("show");
+}
+
+function resumeDemo() {
+  if (!paused) return;
+  paused = false;
+  totalPausedMs += performance.now() - pauseStartedAt;
+  // re-arm waits with their remaining time
+  for (const e of pendingWaits) {
+    if (e.timerId == null) e._arm(e.remainingMs);
+  }
+  // un-freeze cursor and re-issue last move
+  cursorEl.style.transition = "";
+  if (lastCursorTarget) {
+    requestAnimationFrame(() => {
+      cursorEl.style.transform =
+        `translate3d(${lastCursorTarget.x-2}px, ${lastCursorTarget.y-2}px, 0)`;
+    });
+  }
+  pausedOverlay.classList.remove("show");
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.code !== "Space") return;
+  const tag = (e.target && e.target.tagName) || "";
+  if (/^(INPUT|TEXTAREA)$/.test(tag)) return; // don't hijack form fields
+  e.preventDefault();
+  if (paused) resumeDemo(); else pauseDemo();
+});
+const uuid = () => (crypto && crypto.randomUUID)
+  ? crypto.randomUUID()
+  : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+      const r = Math.random()*16|0, v = c === "x" ? r : (r&0x3)|0x8;
+      return v.toString(16);
+    });
+const POLICY_UUID = "8c2a4f9d-1b3e-4a7c-9d5f-2e8b1c4f7a3d";
 
 function el(html) {
   const t = document.createElement("template");
@@ -161,11 +594,92 @@ function el(html) {
   return t.content.firstElementChild;
 }
 
-function scrollDown() {
-  chatEl.scrollTop = chatEl.scrollHeight;
+function scrollDown() { chatEl.scrollTop = chatEl.scrollHeight; }
+
+let totalDuration = 135000;
+let demoStart = 0;
+function tickProgress() {
+  if (paused) { requestAnimationFrame(tickProgress); return; }
+  const t = performance.now() - demoStart - totalPausedMs;
+  const pct = Math.min(100, (t / totalDuration) * 100);
+  progressBar.style.width = pct + "%";
+  if (pct < 100) requestAnimationFrame(tickProgress);
 }
 
-function badgeHTML(state, checkId) {
+// ─── sidebar narration (replaces floating caption + callout bubbles) ────────
+const narrationCurrentEl  = document.getElementById("narrationCurrent");
+const narrationCalloutsEl = document.getElementById("narrationCallouts");
+
+async function caption(text, holdMs = 0) {
+  narrationCurrentEl.classList.remove("visible");
+  await wait(180);
+  narrationCurrentEl.textContent = text;
+  narrationCurrentEl.classList.add("visible");
+  if (holdMs) await wait(holdMs);
+}
+async function hideCaption() {
+  narrationCurrentEl.classList.remove("visible");
+  narrationCurrentEl.textContent = "";
+  await wait(200);
+}
+
+// ─── callouts ───────────────────────────────────────────────────────────────
+const activeCallouts = []; // sidebar rows
+const activeRings = [];
+
+function makeRing(target, tone) {
+  const rect = target.getBoundingClientRect();
+  const ring = document.createElement("div");
+  ring.className = "highlight-ring" + (tone ? " tone-" + tone : "");
+  ring.style.top    = (rect.top - 8) + "px";
+  ring.style.left   = (rect.left - 8) + "px";
+  ring.style.width  = (rect.width + 16) + "px";
+  ring.style.height = (rect.height + 16) + "px";
+  document.body.appendChild(ring);
+  requestAnimationFrame(() => ring.classList.add("visible"));
+  activeRings.push(ring);
+  return ring;
+}
+
+// Side/opts kept for call-site compatibility; bubble is now a sidebar row.
+function callout(target, text, side="up", opts={}) {
+  const tone = opts.tone || "sat"; // sat | block | info
+  const toneClass = tone === "block" ? "tone-block" : tone === "info" ? "tone-info" : "";
+  const row = el(`<div class="nrow ${toneClass}"><span class="dot"></span><span class="txt">${text}</span></div>`);
+  narrationCalloutsEl.appendChild(row);
+  activeCallouts.push(row);
+
+  // highlight ring is what visually points at the target now
+  if (opts.ring !== false) makeRing(target, tone === "sat" ? null : tone);
+
+  return row;
+}
+async function clearCallouts() {
+  for (const r of activeRings) r.classList.remove("visible");
+  await wait(200);
+  for (const c of activeCallouts) c.remove();
+  for (const r of activeRings)    r.remove();
+  activeCallouts.length = 0;
+  activeRings.length = 0;
+}
+
+// ─── fake cursor ────────────────────────────────────────────────────────────
+async function moveCursorTo(target, opts={}) {
+  const rect = target.getBoundingClientRect();
+  const x = rect.left + rect.width/2;
+  const y = rect.top + rect.height/2;
+  lastCursorTarget = { x, y };
+  cursorEl.style.transform = `translate3d(${x-2}px, ${y-2}px, 0)`;
+  await wait(opts.duration ?? 900);
+}
+async function clickCursor() {
+  cursorEl.classList.add("click");
+  await wait(180);
+  cursorEl.classList.remove("click");
+}
+
+// ─── badges ─────────────────────────────────────────────────────────────────
+function badgeHTML(state, checkId, latencyMs) {
   if (state === "verifying") {
     return `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-neutral-100 text-neutral-500 border-neutral-200">
       <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor" class="animate-spin"><path d="M10 2a8 8 0 1 1-8 8h2a6 6 0 1 0 6-6V2Z"/></svg>
@@ -173,21 +687,15 @@ function badgeHTML(state, checkId) {
     </span>`;
   }
   if (state === "blocked") {
-    return `<button data-check="${checkId}" class="proofBtn inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+    return `<button data-check="${checkId}" data-state="blocked" class="proofBtn inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
       <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm3.5 11.4-1.1 1.1L10 12l-2.4 2.5-1.1-1.1L8.9 11 6.5 8.6l1.1-1.1L10 9.9l2.4-2.4 1.1 1.1L11.1 11l2.4 2.4Z"/></svg>
       BLOCKED · UNSAT
     </button>`;
   }
-  if (state === "shadow") {
-    return `<button data-check="${checkId}" class="proofBtn inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
-      <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5 3 4v6c0 4.2 3 7.8 7 8.5 4-.7 7-4.3 7-8.5V4l-7-2.5Z"/></svg>
-      Shadow · UNSAT (would block)
-    </button>`;
-  }
   // verified SAT
-  return `<button data-check="${checkId}" class="proofBtn inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+  return `<button data-check="${checkId}" data-state="verified" class="proofBtn inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
     <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5 3 4v6c0 4.2 3 7.8 7 8.5 4-.7 7-4.3 7-8.5V4l-7-2.5Zm-.8 12.2-3.1-3.1 1.2-1.2 1.9 1.9 4-4 1.2 1.2-5.2 5.2Z"/></svg>
-    Verified
+    Verified · ${latencyMs} ms
   </button>`;
 }
 
@@ -202,14 +710,14 @@ function addUserMessage(text) {
 }
 
 function addAssistantShell() {
-  const id = "msg-" + Math.random().toString(36).slice(2,8);
   const node = el(`
-    <div id="${id}" class="fade-in">
+    <div class="fade-in">
       <div class="flex items-center gap-2 mb-1.5">
         <div class="w-6 h-6 rounded-lg bg-neutral-900 text-white grid place-items-center text-[11px] font-bold">M</div>
         <div class="text-xs text-neutral-500">Mike</div>
         <div class="badge ml-1"></div>
       </div>
+      <div class="action-label"></div>
       <div class="body text-[15px] leading-relaxed text-neutral-800 whitespace-pre-wrap"></div>
     </div>
   `);
@@ -218,22 +726,82 @@ function addAssistantShell() {
   return node;
 }
 
-async function typeInto(el, text, ms=14) {
-  el.classList.add("typing");
+function setActionLabel(shell, action, params) {
+  const slot = shell.querySelector(".action-label");
+  const truncated = (params.input || "").length > 52
+    ? params.input.slice(0, 52) + "…"
+    : params.input;
+  slot.innerHTML =
+    `<span class="k">action:</span> ` +
+    `<span class="v">${action}</span>(matter=<span class="v">"${params.matter}"</span>, ` +
+    `input=<span class="v">"${truncated.replace(/"/g,'\\"')}"</span>)`;
+}
+
+async function typeInto(elem, text, ms=12) {
+  elem.classList.add("typing");
   for (let i = 0; i < text.length; i++) {
-    el.textContent += text[i];
+    elem.textContent += text[i];
     if (i % 3 === 0) scrollDown();
-    await new Promise(r => setTimeout(r, ms));
+    await wait(ms);
   }
-  el.classList.remove("typing");
+  elem.classList.remove("typing");
   scrollDown();
 }
 
+async function typeIntoInput(text, ms=35) {
+  const input = document.getElementById("prompt");
+  input.value = "";
+  for (let i = 0; i < text.length; i++) {
+    input.value += text[i];
+    await wait(ms);
+  }
+}
+
+// ─── modal ──────────────────────────────────────────────────────────────────
+const modal = document.getElementById("modal");
+function openModal(opts) {
+  document.getElementById("modalCheckId").textContent     = opts.checkId;
+  document.getElementById("modalCurlId").textContent      = opts.checkId;
+  document.getElementById("modalCurlPolicy").textContent  = POLICY_UUID;
+  document.getElementById("modalCurlAction").textContent  = (opts.actionText || "").slice(0, 60);
+  document.getElementById("modalPolicy").textContent      = opts.policy.replace(/\s*\(.*\)$/, "");
+  document.getElementById("modalPolicyId").textContent    = POLICY_UUID;
+  document.getElementById("modalLatency").textContent     = opts.latency + " ms";
+  const verdictEl = document.getElementById("modalVerdict");
+  const iconEl    = document.getElementById("modalIcon");
+  const titleEl   = document.getElementById("modalTitle");
+  const curlVerdict = document.getElementById("modalCurlVerdict");
+  if (opts.verdict === "SAT") {
+    verdictEl.textContent = "SAT (allowed)";
+    verdictEl.className = "font-semibold text-emerald-700";
+    iconEl.className = "w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 grid place-items-center";
+    titleEl.textContent = "Verified — SAT";
+    curlVerdict.textContent = "ALLOWED";
+    curlVerdict.className = "text-emerald-300";
+  } else {
+    verdictEl.textContent = "UNSAT (blocked)";
+    verdictEl.className = "font-semibold text-rose-700";
+    iconEl.className = "w-9 h-9 rounded-lg bg-rose-50 text-rose-700 grid place-items-center";
+    titleEl.textContent = "Blocked by policy";
+    curlVerdict.textContent = "BLOCKED";
+    curlVerdict.className = "text-rose-300";
+  }
+  const reasonRow = document.getElementById("modalReasonRow");
+  if (opts.reason) {
+    reasonRow.classList.remove("hidden");
+    reasonRow.classList.add("border-t", "border-neutral-100");
+    document.getElementById("modalReason").textContent = opts.reason;
+  } else {
+    reasonRow.classList.add("hidden");
+  }
+  modal.classList.remove("hidden");
+}
+function closeModal() { modal.classList.add("hidden"); }
+
 // ─── scenarios ──────────────────────────────────────────────────────────────
-const SCENARIOS = {
-  "Summarize the indemnification clause in NDA-Acme-v3.pdf": {
-    verdict: "SAT",
-    response:
+const SCENARIO_SAT = {
+  prompt: "Summarize the indemnification clause in NDA-Acme-v3.pdf",
+  response:
 `The indemnification clause in NDA-Acme-v3.pdf (§9.2) is mutual and capped at fees paid in the 12 months preceding the claim. Key points:
 
 • Each party indemnifies the other for third-party IP infringement claims arising from their own materials.
@@ -241,171 +809,285 @@ const SCENARIOS = {
 • Notice must be given within 30 days of the indemnified party becoming aware of the claim.
 
 This is standard for a mutual NDA between commercial counterparties of comparable size. [cite §9.2]`,
-    policy: "legal-guardrails-v1 (v1.4)",
-  },
+  policy: "legal-guardrails-v1 (v1.4)",
+};
 
-  "Should I sue Acme Corp for $10M in damages?": {
-    verdict: "UNSAT",
-    reason: "Output would contain jurisdiction-specific legal advice without an authorized-counsel disclaimer or cited authority. Policy rule: no_unauthorized_legal_advice.",
-    blockedResponse:
+const SCENARIO_BLOCK = {
+  prompt: "Should I sue Acme Corp for $10M in damages?",
+  reason: "Output would contain jurisdiction-specific legal advice without an authorized-counsel disclaimer or cited authority. Policy rule: no_unauthorized_legal_advice.",
+  wouldBeResponse:
+`Yes — based on the facts in NDA-Acme-v3.pdf and MSA-Acme-2026.pdf, you have a strong claim for breach of contract and tortious interference. I recommend filing in the Northern District of California within the 4-year statute of limitations. Your projected $10M damages appear well-supported under §201 and the liquidated-damages clause in §14.3.`,
+  response:
 `I can't generate that response. The configured policy blocks specific legal-action recommendations without an attorney disclaimer and cited authority.
 
 The cryptographic proof of this block is attached to this message and can be re-verified independently.`,
-    shadowResponse:
-`You should absolutely sue. Based on §9.2 of the NDA, Acme's breach is material and you'd likely recover full damages plus fees in a Delaware Chancery action. File before the 30-day notice window closes.
-
-⚠ In shadow mode this response was delivered, but Preflight flagged it UNSAT — in enforce mode the user would never have seen it.`,
-    policy: "legal-guardrails-v1 (v1.4)",
-  },
-
-  "Pull the SSN of every employee mentioned in MSA-Acme-2026.pdf": {
-    verdict: "UNSAT",
-    reason: "Output would contain Social Security Numbers. Policy rule: no_pii_egress.",
-    blockedResponse:
-`I can't generate that response. The configured policy blocks any output containing Social Security Numbers, account numbers, or DOBs.
-
-The cryptographic proof of this block is attached to this message and can be re-verified independently.`,
-    shadowResponse:
-`Found 3 employees with SSNs in MSA-Acme-2026.pdf: Jane Doe (123-45-6789), John Smith (987-65-4321), Maria Garcia (555-12-3456).
-
-⚠ In shadow mode this response was delivered, but Preflight flagged it UNSAT — in enforce mode this PII would never have left the server.`,
-    policy: "legal-guardrails-v1 (v1.4)",
-  },
+  policy: "legal-guardrails-v1 (v1.4)",
 };
 
-// ─── flow ───────────────────────────────────────────────────────────────────
-async function ask(q) {
-  if (!q.trim()) return;
-  sendBtn.disabled = true;
-  input.value = "";
+// captured for the auditor replay coda
+let lastBlockProof = null;
 
-  addUserMessage(q);
+// ─── flows ──────────────────────────────────────────────────────────────────
+async function runSatFlow() {
+  const promptInput = document.getElementById("prompt");
+  const sendBtn = document.getElementById("send");
 
-  const scenario = SCENARIOS[q] ?? {
+  await caption("User asks Mike a question about a legal document");
+  await wait(300);
+
+  // Move cursor to input, then type
+  await moveCursorTo(promptInput);
+  await wait(200);
+  await typeIntoInput(SCENARIO_SAT.prompt, 30);
+  await wait(200);
+
+  // Move cursor to Send, click
+  await moveCursorTo(sendBtn, { duration: 600 });
+  await clickCursor();
+  await wait(150);
+
+  addUserMessage(SCENARIO_SAT.prompt);
+  promptInput.value = "";
+  await wait(300);
+
+  // Assistant shell + verifying
+  const shell = addAssistantShell();
+  const badgeSlot = shell.querySelector(".badge");
+  const body = shell.querySelector(".body");
+  setActionLabel(shell, "generate_response", { matter: "acme-nda", input: SCENARIO_SAT.prompt });
+  badgeSlot.innerHTML = badgeHTML("verifying");
+
+  await wait(200);
+  callout(badgeSlot, "Preflight verifies the action against your policy", "up");
+  await caption("Plain-English policy → SMT-LIB → SAT / UNSAT. No LLM judge.");
+  await wait(1500);
+  await clearCallouts();
+
+  // Resolve to verified
+  const latency = 38 + Math.floor(Math.random()*14);
+  const checkId = uuid();
+  badgeSlot.innerHTML = badgeHTML("verified", checkId, latency);
+  const pill = badgeSlot.firstElementChild;
+  pill.dataset.policy = SCENARIO_SAT.policy;
+  pill.dataset.latency = latency;
+
+  await wait(250);
+  callout(pill, "Cryptographic proof receipt — SAT", "up");
+  await caption("SAT means the action is allowed under your policy");
+  await wait(1400);
+  await clearCallouts();
+
+  await typeInto(body, SCENARIO_SAT.response, 10);
+  await wait(500);
+
+  // Cursor → click the badge to open modal
+  await moveCursorTo(pill);
+  await clickCursor();
+  openModal({
     verdict: "SAT",
-    response: "I've received your question and would normally answer here. This demo only ships canned responses — try one of the suggested prompts below the input box to see the full Preflight flow.",
-    policy: "legal-guardrails-v1 (v1.4)",
-  };
+    checkId,
+    latency,
+    policy: SCENARIO_SAT.policy,
+    actionText: SCENARIO_SAT.prompt,
+  });
+  await wait(400);
+
+  // Callouts on modal fields
+  const checkRow = document.getElementById("modalCheckIdRow");
+  const curlBox  = document.getElementById("modalCurlBox");
+  callout(checkRow, "Signed proof — re-verifiable by anyone, anywhere", "right");
+  await caption("Any third party can re-verify this proof, months later");
+  await wait(1800);
+  await clearCallouts();
+
+  callout(curlBox, "No Mike access required to verify", "right");
+  await wait(1600);
+  await clearCallouts();
+
+  closeModal();
+  await wait(400);
+}
+
+async function runBlockFlow() {
+  const promptInput = document.getElementById("prompt");
+  const sendBtn = document.getElementById("send");
+
+  await caption("Now a prompt that crosses a policy line");
+  await wait(500);
+
+  await moveCursorTo(promptInput);
+  await typeIntoInput(SCENARIO_BLOCK.prompt, 28);
+
+  await moveCursorTo(sendBtn, { duration: 500 });
+  await clickCursor();
+  await wait(120);
+
+  addUserMessage(SCENARIO_BLOCK.prompt);
+  promptInput.value = "";
+  await wait(250);
 
   const shell = addAssistantShell();
   const badgeSlot = shell.querySelector(".badge");
   const body = shell.querySelector(".body");
+  setActionLabel(shell, "generate_response", { matter: "acme-nda", input: SCENARIO_BLOCK.prompt });
+  badgeSlot.innerHTML = badgeHTML("verifying");
 
-  if (mode !== "off") {
-    badgeSlot.innerHTML = badgeHTML("verifying");
-    await new Promise(r => setTimeout(r, 600 + Math.random()*200));
-  }
+  await wait(800);
 
-  const checkId = rid();
-  let finalState;
-  let responseText;
+  // Resolve to BLOCKED
+  const latency = 44 + Math.floor(Math.random()*12);
+  const checkId = uuid();
+  badgeSlot.innerHTML = badgeHTML("blocked", checkId, latency);
+  const pill = badgeSlot.firstElementChild;
+  pill.dataset.policy = SCENARIO_BLOCK.policy;
+  pill.dataset.reason = SCENARIO_BLOCK.reason;
+  pill.dataset.latency = latency;
 
-  if (mode === "off") {
-    finalState = null;
-    responseText = scenario.shadowResponse ?? scenario.response;
-  } else if (scenario.verdict === "SAT") {
-    finalState = "verified";
-    responseText = scenario.response;
-  } else if (mode === "enforce") {
-    finalState = "blocked";
-    responseText = scenario.blockedResponse;
-  } else {
-    // shadow + UNSAT — response goes through but flagged
-    finalState = "shadow";
-    responseText = scenario.shadowResponse;
-  }
+  // capture for auditor replay coda
+  lastBlockProof = { checkId, latency, policy: SCENARIO_BLOCK.policy, reason: SCENARIO_BLOCK.reason };
 
-  if (finalState) {
-    badgeSlot.innerHTML = badgeHTML(finalState, checkId);
-    // stash data for the modal
-    badgeSlot.firstElementChild.dataset.verdict = scenario.verdict;
-    badgeSlot.firstElementChild.dataset.policy  = scenario.policy;
-    badgeSlot.firstElementChild.dataset.reason  = scenario.reason ?? "";
-    badgeSlot.firstElementChild.dataset.state   = finalState;
-  } else {
-    badgeSlot.innerHTML = `<span class="text-[11px] text-neutral-400 italic">verification off</span>`;
-  }
+  await wait(250);
+  callout(pill, "UNSAT — math enforced the rule", "up", { tone: "block" });
+  await caption("Policy `no_unauthorized_legal_advice` blocked the response");
+  await wait(1700);
+  await clearCallouts();
 
-  await typeInto(body, responseText, finalState === "blocked" ? 8 : 12);
+  // Show what Mike was about to say — redacted
+  const redacted = el(`
+    <div class="redacted-block">
+      <div class="draft">${SCENARIO_BLOCK.wouldBeResponse.replace(/</g,"&lt;")}</div>
+      <div class="stamp">
+        <div class="label">Blocked · UNSAT</div>
+        <div class="reason">${SCENARIO_BLOCK.reason}</div>
+      </div>
+    </div>
+  `);
+  body.appendChild(redacted);
+  scrollDown();
 
-  sendBtn.disabled = false;
-  input.focus();
+  await wait(500);
+  callout(redacted, "What Mike was about to say — caught pre-output", "up", { tone: "block" });
+  await caption("The unsafe draft never reaches the user");
+  await wait(2200);
+  await clearCallouts();
+
+  // Then the safe apology / proof reference
+  const safe = document.createElement("div");
+  body.appendChild(safe);
+  await typeInto(safe, SCENARIO_BLOCK.response, 9);
+  await wait(400);
+
+  await moveCursorTo(pill);
+  await clickCursor();
+  openModal({
+    verdict: "UNSAT",
+    checkId,
+    latency,
+    policy: SCENARIO_BLOCK.policy,
+    reason: SCENARIO_BLOCK.reason,
+    actionText: SCENARIO_BLOCK.prompt,
+  });
+  await wait(400);
+
+  const reasonRow = document.getElementById("modalReasonRow");
+  callout(reasonRow, "Block reason is included in the signed proof", "right", { tone: "block" });
+  await caption("Defensible, machine-checkable audit trail");
+  await wait(1800);
+  await clearCallouts();
+
+  closeModal();
+  await wait(400);
 }
 
-// ─── modal ──────────────────────────────────────────────────────────────────
-const modal = document.getElementById("modal");
-document.body.addEventListener("click", (e) => {
-  const btn = e.target.closest(".proofBtn");
-  if (btn) {
-    const state   = btn.dataset.state;
-    const checkId = btn.dataset.check;
-    const verdict = btn.dataset.verdict;
-    const reason  = btn.dataset.reason;
-    const policy  = btn.dataset.policy;
+async function showAuditorScene() {
+  if (!lastBlockProof) return;
+  const scene = document.getElementById("auditorScene");
+  const { checkId, latency, policy, reason } = lastBlockProof;
+  document.getElementById("auditorUrl").textContent      = `https://icme.io/proofs/${checkId}`;
+  document.getElementById("auditorCheckId").textContent  = checkId;
+  document.getElementById("auditorPolicyId").textContent = POLICY_UUID;
+  document.getElementById("auditorPolicy").textContent   = policy.replace(/\s*\(.*\)$/, "");
+  document.getElementById("auditorVerdict").textContent  = "UNSAT";
+  document.getElementById("auditorTime").textContent     = new Date().toISOString().replace("T"," ").slice(0,19) + "Z";
+  document.getElementById("auditorReason").textContent   = reason;
 
-    document.getElementById("modalCheckId").textContent = checkId;
-    document.getElementById("modalCurlId").textContent  = checkId;
-    document.getElementById("modalPolicy").textContent  = policy;
-    document.getElementById("modalLatency").textContent = (28 + Math.floor(Math.random()*60)) + " ms";
+  // dismiss any leftover proof modal first
+  closeModal();
+  await hideCaption();
 
-    const verdictEl = document.getElementById("modalVerdict");
-    const iconEl    = document.getElementById("modalIcon");
-    const titleEl   = document.getElementById("modalTitle");
+  scene.classList.add("show");
+  await wait(700);
+  await caption("6 months later. Different person. Different machine.");
+  await wait(2400);
+  await caption("Pasted the check_id into icme.io — same verdict, no firm access.");
+  await wait(2400);
+  await caption("This is what the state bar, opposing counsel, or a client sees.");
+  await wait(2400);
+  await hideCaption();
+  await wait(500);
+  scene.classList.remove("show");
+  await wait(400);
+}
 
-    if (verdict === "SAT") {
-      verdictEl.textContent = "SAT (allowed)";
-      verdictEl.className = "font-semibold text-emerald-700";
-      iconEl.className = "w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 grid place-items-center";
-      titleEl.textContent = "Verified — SAT";
-    } else if (state === "shadow") {
-      verdictEl.textContent = "UNSAT (shadow — not blocked)";
-      verdictEl.className = "font-semibold text-amber-700";
-      iconEl.className = "w-9 h-9 rounded-lg bg-amber-50 text-amber-700 grid place-items-center";
-      titleEl.textContent = "Shadow verdict — would block in enforce mode";
-    } else {
-      verdictEl.textContent = "UNSAT (blocked)";
-      verdictEl.className = "font-semibold text-rose-700";
-      iconEl.className = "w-9 h-9 rounded-lg bg-rose-50 text-rose-700 grid place-items-center";
-      titleEl.textContent = "Blocked by policy";
-    }
+async function showPolicyCard() {
+  const card = document.getElementById("policyCard");
+  card.classList.add("show");
+  await wait(4500);
+  card.classList.remove("show");
+  await wait(400);
+}
 
-    const reasonRow = document.getElementById("modalReasonRow");
-    if (reason) {
-      reasonRow.classList.remove("hidden");
-      reasonRow.classList.add("border-t", "border-neutral-100");
-      document.getElementById("modalReason").textContent = reason;
-    } else {
-      reasonRow.classList.add("hidden");
-    }
+async function showEndCard() {
+  await hideCaption();
+  document.getElementById("endCard").classList.add("show");
+}
 
-    modal.classList.remove("hidden");
-  }
-  if (e.target.id === "modalClose" || e.target === modal) {
-    modal.classList.add("hidden");
-  }
+// ─── main loop ──────────────────────────────────────────────────────────────
+let isRunning = false;
+async function playDemo() {
+  if (isRunning) return;
+  isRunning = true;
+
+  // Reset
+  chatEl.innerHTML = "";
+  await clearCallouts();
+  document.getElementById("endCard").classList.remove("show");
+  totalPausedMs = 0;
+
+  demoStart = performance.now();
+  requestAnimationFrame(tickProgress);
+
+  await caption("Mike + ICME Preflight — verified legal AI");
+  await wait(1600);
+  await caption("Open-source legal AI by @willchen96 + cryptographic verification");
+  await wait(1800);
+  await hideCaption();
+
+  // Show what we're verifying against, before running anything
+  await caption("First — here's the policy Mike will be checked against");
+  await wait(900);
+  await showPolicyCard();
+  await hideCaption();
+
+  await runSatFlow();
+  await runBlockFlow();
+  await showAuditorScene();
+
+  await showEndCard();
+  isRunning = false;
+
+  // Auto-loop after 8s if user doesn't click replay
+  loopTimer = setTimeout(playDemo, 8000);
+}
+
+let loopTimer = null;
+document.getElementById("replayBtn").addEventListener("click", () => {
+  if (loopTimer) clearTimeout(loopTimer);
+  playDemo();
 });
 
-// ─── mode switcher ──────────────────────────────────────────────────────────
-const modeLabel = document.getElementById("modeLabel");
-document.querySelectorAll(".modeBtn").forEach(b => b.addEventListener("click", () => {
-  mode = b.dataset.mode;
-  document.querySelectorAll(".modeBtn").forEach(x => x.className =
-    "modeBtn flex-1 px-2 py-1 rounded border text-[11px]");
-  if (mode === "enforce") b.className += " bg-emerald-50 border-emerald-200 text-emerald-800";
-  if (mode === "shadow")  b.className += " bg-amber-50 border-amber-200 text-amber-800";
-  if (mode === "off")     b.className += " bg-neutral-100 border-neutral-200 text-neutral-600";
-  modeLabel.textContent = mode.toUpperCase();
-  modeLabel.className =
-    mode === "enforce" ? "font-semibold text-emerald-700"
-    : mode === "shadow" ? "font-semibold text-amber-700"
-    : "font-semibold text-neutral-500";
-}));
-
-// ─── wiring ─────────────────────────────────────────────────────────────────
-sendBtn.addEventListener("click", () => ask(input.value));
-input.addEventListener("keydown", e => { if (e.key === "Enter") ask(input.value); });
-document.querySelectorAll(".suggest").forEach(b =>
-  b.addEventListener("click", () => ask(b.dataset.q)));
+// Start
+window.addEventListener("load", () => setTimeout(playDemo, 600));
 </script>
 </body>
 </html>

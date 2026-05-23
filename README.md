@@ -106,17 +106,34 @@ real verdicts before flipping the switch.
 ### Standalone UI demo (no setup)
 
 Open [`demo/index.html`](./demo/index.html) in any browser. Single file,
-no build step, no backend. Try the three suggested prompts to see:
+no build step, no backend. Auto-plays end-to-end in about two minutes
+and loops.
 
-- A **SAT** path — assistant answers, green "Verified" pill, click to see
-  the proof receipt.
-- An **UNSAT** path that the policy blocks (specific legal advice).
-- A second **UNSAT** path that catches PII egress (SSNs).
+What it shows, in order:
 
-The sidebar toggles between `off`, `shadow`, and `enforce` modes so you
-can see what each one does to the same prompt. Shadow mode is
-particularly useful for the demo — it shows the dangerous response *and*
-the verdict that would have blocked it in production.
+1. **Policy preamble** — the plain-English policy in force, with its
+   `policy_id` (UUID) and the rules it compiles to: matter scope,
+   citation integrity, no specific advice, no PII.
+2. **Matter context** — chat header shows `Smith v. Acme · Project · 247
+   docs · matter scope enforced`, so every action is bound to a project.
+3. **SAT path** — assistant answers a clause-summary question. The
+   action label (`summarizeClause(matter=…, input=…)`) is shown above
+   the response, the green "Verified" pill links to the proof receipt,
+   and a modal opens with the `check_id`, policy UUID, latency, and the
+   exact `POST /v1/verifyPaid` payload.
+4. **UNSAT path** — a "what should I do" question. The page renders
+   what the model *would have* returned (struck through, stamped
+   `Blocked · UNSAT` with the reason), followed by the safe response
+   the user actually sees. Both stored on the same `chat_messages` row.
+5. **Auditor replay** — a separate browser scene six months later: the
+   `check_id` is pasted into `icme.io/proofs/<uuid>` and re-verifies
+   independently, with no Mike access and no model access.
+
+All annotation text appears in a dedicated **Narration** panel in the
+left sidebar; the main chat area is never covered. Highlight rings
+point to whatever element each callout is about.
+
+Press **space** at any time to pause/resume.
 
 ### Working reference implementation
 
