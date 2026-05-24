@@ -1,10 +1,10 @@
-# INSTALL — wiring preflight-mike into a Mike checkout
+# INSTALL: wiring preflight-mike into a Mike checkout
 
-If you used `git am < mike.patch` you're done — skip to **Step 4 (env)**
+If you used `git am < mike.patch` you're done. Skip to **Step 4 (env)**
 and **Step 5 (DB)**. This file documents the manual wiring for reviewers
 who want to see every edit explicitly.
 
-## Step 1 — drop in the new files
+## Step 1: drop in the new files
 
 | From                                   | To                                                              |
 |----------------------------------------|------------------------------------------------------------------|
@@ -13,7 +13,7 @@ who want to see every edit explicitly.
 | `backend/migrations/2026_01_*.sql`     | `backend/migrations/2026_01_preflight.sql`                      |
 | `frontend/components/VerifiedBadge.tsx`| `frontend/src/app/components/assistant/VerifiedBadge.tsx`       |
 
-## Step 2 — wire the backend
+## Step 2: wire the backend
 
 ### `backend/src/routes/chat.ts`
 
@@ -52,7 +52,7 @@ await db.from("chat_messages").insert({
 });
 ```
 
-## Step 3 — wire the frontend
+## Step 3: wire the frontend
 
 ### `frontend/src/app/components/shared/types.ts`
 
@@ -125,7 +125,7 @@ In the `<AssistantMessage ... />` call, add:
 preflight={(msg as any).preflight}
 ```
 
-## Step 4 — environment
+## Step 4: environment
 
 Append to `backend/.env`:
 
@@ -138,7 +138,7 @@ ICME_PREFLIGHT_ENFORCE=shadow
 
 Sign up for an API key and create a policy at https://docs.icme.io.
 
-## Step 5 — database migration
+## Step 5: database migration
 
 Run in the Supabase SQL editor (or paste into `schema.sql`):
 
@@ -153,7 +153,7 @@ create index if not exists idx_chat_messages_preflight_check
   on public.chat_messages(preflight_check_id);
 ```
 
-## Step 6 — flip to enforce (when ready)
+## Step 6: flip to enforce (when ready)
 
 Run in shadow mode for a few days and inspect verdicts:
 
@@ -173,7 +173,7 @@ ICME_PREFLIGHT_ENFORCE=enforce
 Blocked requests will return HTTP 451 with the `check_id` so users (or
 support staff) can look up the proof.
 
-## Step 7 — replace the stub `verifyWithPreflight`
+## Step 7: replace the stub `verifyWithPreflight`
 
 `backend/src/lib/preflight.ts` ships a stub that fakes `SAT` so the wiring
 can be tested without an ICME account. Replace the marked block with the
@@ -185,4 +185,4 @@ real fetch call (commented out in-file) once you have credentials.
 curl https://api.icme.io/v1/proofs/<check_id>
 ```
 
-The response is self-contained and signed — no Mike access required.
+The response is self-contained and signed. No Mike access required.
