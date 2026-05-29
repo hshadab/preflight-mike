@@ -37,7 +37,7 @@ Persist the check on the assistant insert (around line 583):
 
 ```ts
 const preflightCheck = res.locals.preflightCheck as
-    | { check_id: string; verdict: string; policy_id: string; policy_version?: string }
+    | { check_id: string; verdict: string; policy_id: string; policy_hash?: string; policy_version?: string }
     | undefined;
 
 await db.from("chat_messages").insert({
@@ -48,6 +48,7 @@ await db.from("chat_messages").insert({
     preflight_check_id: preflightCheck?.check_id ?? null,
     preflight_verdict: preflightCheck?.verdict ?? null,
     preflight_policy_id: preflightCheck?.policy_id ?? null,
+    preflight_policy_hash: preflightCheck?.policy_hash ?? null,
     preflight_policy_version: preflightCheck?.policy_version ?? null,
 });
 ```
@@ -59,8 +60,9 @@ await db.from("chat_messages").insert({
 ```ts
 export interface MikePreflightInfo {
   check_id: string | null;
-  verdict: "SAT" | "UNSAT" | "ERROR" | null;
+  verdict: "ALLOWED" | "BLOCKED" | "ERROR" | null;
   policy_id?: string | null;
+  policy_hash?: string | null;
   policy_version?: string | null;
 }
 
@@ -74,8 +76,9 @@ Add to the `ServerMessage` interface:
 
 ```ts
 preflight_check_id?: string | null;
-preflight_verdict?: "SAT" | "UNSAT" | "ERROR" | null;
+preflight_verdict?: "ALLOWED" | "BLOCKED" | "ERROR" | null;
 preflight_policy_id?: string | null;
+preflight_policy_hash?: string | null;
 preflight_policy_version?: string | null;
 ```
 
@@ -87,6 +90,7 @@ preflight: m.preflight_check_id
           check_id: m.preflight_check_id,
           verdict: m.preflight_verdict ?? null,
           policy_id: m.preflight_policy_id ?? null,
+          policy_hash: m.preflight_policy_hash ?? null,
           policy_version: m.preflight_policy_version ?? null,
       }
     : undefined,
@@ -147,6 +151,7 @@ alter table public.chat_messages
   add column if not exists preflight_check_id text,
   add column if not exists preflight_verdict  text,
   add column if not exists preflight_policy_id text,
+  add column if not exists preflight_policy_hash text,
   add column if not exists preflight_policy_version text;
 
 create index if not exists idx_chat_messages_preflight_check
@@ -164,7 +169,7 @@ where role = 'assistant'
 group by 1;
 ```
 
-When the UNSAT rate looks correct for your policy, set:
+When the BLOCKED rate looks correct for your policy, set:
 
 ```
 ICME_PREFLIGHT_ENFORCE=enforce
@@ -173,11 +178,13 @@ ICME_PREFLIGHT_ENFORCE=enforce
 Blocked requests will return HTTP 451 with the `check_id` so users (or
 support staff) can look up the proof.
 
-## Step 7: replace the stub `verifyWithPreflight`
+## Step 7: enable real verification
 
-`backend/src/lib/preflight.ts` ships a stub that fakes `SAT` so the wiring
-can be tested without an ICME account. Replace the marked block with the
-real fetch call (commented out in-file) once you have credentials.
+`backend/src/lib/preflight.ts` calls `POST /v1/verifyPaid` whenever
+`ICME_API_KEY` is set. With no key it returns an `ERROR` verdict (which
+fails open in shadow mode). To exercise the wiring end-to-end without an
+ICME account, set `ICME_PREFLIGHT_DEMO=1` to return a synthetic `ALLOWED`
+verdict. Remove that flag (and add a real `ICME_API_KEY`) for production.
 
 ## Verifying a proof from anywhere
 

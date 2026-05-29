@@ -138,14 +138,29 @@ const MODE = (process.env.ICME_PREFLIGHT_ENFORCE ?? "shadow") as
   | "shadow"
   | "enforce";
 
+// Mike sends `{ messages: [{ role, content }], project_id, ... }`.
+function lastUserText(body: any): string | null {
+  const messages = body?.messages;
+  if (!Array.isArray(messages)) return null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m?.role === "user" && typeof m.content === "string") return m.content;
+  }
+  return null;
+}
+
 export const preflightVerify: RequestHandler = async (req, res, next) => {
   if (MODE === "off") return next();
 
+  const input = lastUserText(req.body);
+  if (!input) return next(); // tool follow-up, nothing to verify
+
   const action = {
     name: "chat.message",
-    project_id: req.body?.projectId ?? null,
-    user_id: (req as any).user?.id ?? null,
-    input: req.body?.message ?? "",
+    input,
+    project_id: req.body?.project_id ?? null,
+    user_id: res.locals.userId ?? null,
+    surface: "mike.chat",
   };
 
   try {
@@ -154,9 +169,10 @@ export const preflightVerify: RequestHandler = async (req, res, next) => {
       policy_id: process.env.ICME_POLICY_ID!,
     });
 
-    res.locals.preflightCheck = result;
+    res.locals.preflightCheck = result; // includes policy_hash
 
-    if (MODE === "enforce" && result.verdict === "BLOCKED") {
+    // Fail closed in enforce mode: block anything that is not ALLOWED.
+    if (MODE === "enforce" && result.verdict !== "ALLOWED") {
       return res.status(451).json({
         error: "blocked_by_policy",
         check_id: result.check_id,
@@ -181,6 +197,7 @@ alter table public.chat_messages
   add column if not exists preflight_check_id text,
   add column if not exists preflight_verdict  text,
   add column if not exists preflight_policy_id text,
+  add column if not exists preflight_policy_hash text,
   add column if not exists preflight_policy_version text;
 
 create index if not exists idx_chat_messages_preflight_check

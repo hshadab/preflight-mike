@@ -13,13 +13,13 @@ is stored alongside the message and surfaced in the UI as a clickable
 user query
    │
    ▼
-[ Preflight middleware ] ──▶ verify(action, policy) ──▶ SAT / UNSAT / ERROR
+[ Preflight middleware ] ──▶ verify(action, policy) ──▶ ALLOWED / BLOCKED / ERROR
    │                                                         │
    ▼                                                         ▼
 LLM call                                          check_id persisted on
    │                                              chat_messages row
    ▼
-assistant response  ──▶  UI badge linking to icme.io/proof/<check_id>
+assistant response  ──▶  UI badge linking to icme.io/proofs/<check_id>
 ```
 
 ## Why this exists
@@ -34,8 +34,9 @@ Suggested policies for a legal AI deployment:
 
 - **No unauthorized legal advice.** Jurisdictional outputs require a
   disclaimer and a cited authority.
-- **Privilege boundary.** References must resolve to the current
-  `project_id` only.
+- **Matter boundary.** References must resolve to the current
+  `project_id` only — no pulling another client's confidential
+  material across matters.
 - **PII egress.** No SSNs, account numbers, or DOBs in output.
 - **Citation integrity.** Every cited case or statute must exist in the
   project's corpus.
@@ -98,7 +99,7 @@ hunks across `chat.ts`, `mikeApi.ts`, `types.ts`, `AssistantMessage.tsx`,
 |-----------|------------------------------------------------------------------------|
 | `off`     | Middleware no-ops. Use to disable without removing code.              |
 | `shadow`  | Calls Preflight, persists verdict + proof, but **never blocks**. Default. |
-| `enforce` | Returns HTTP 451 on `UNSAT` or verification error. Use in production. |
+| `enforce` | Fails closed: returns HTTP 451 on `BLOCKED` or verification error. Use in production. |
 
 Shadow mode is the recommended starting point. Collect a few days of
 real verdicts before flipping the switch.
@@ -121,15 +122,22 @@ What it shows, in order:
 3. **SAT path.** Assistant answers a clause-summary question. The
    action label (`summarizeClause(matter=…, input=…)`) is shown above
    the response, the green "Verified" pill links to the proof receipt,
-   and a modal opens with the `check_id`, policy UUID, latency, and the
-   exact `POST /v1/verifyPaid` payload.
-4. **UNSAT path.** A "what should I do" question. The page renders
-   what the model *would have* returned (struck through, stamped
-   `Blocked · UNSAT` with the reason), followed by the safe response
-   the user actually sees. Both stored on the same `chat_messages` row.
+   and a modal opens with the `check_id`, policy UUID, `policy_hash`,
+   latency, and the exact `POST /v1/verifyPaid` payload.
+4. **UNSAT path (cross-matter confidentiality breach).** A question that asks
+   Mike to compare the current matter against a *different* client's
+   document. The action label shows the referenced docs with the
+   out-of-matter one (`Globex-MSA-2025`) flagged in red. The page renders
+   what the model *would have* returned — confidential terms pulled from
+   the other matter (struck through, stamped `Blocked · UNSAT`) — followed
+   by the safe response the user actually sees. Both stored on the same
+   `chat_messages` row. The block reason names the exact offending
+   document: the deterministic `matter_scope` witness.
 5. **Auditor replay.** A separate browser scene six months later: the
    `check_id` is pasted into `icme.io/proofs/<uuid>` and re-verifies
-   independently, with no Mike access and no model access.
+   independently, with no Mike access and no model access. The public
+   receipt exposes only the `policy_hash` (not the rules, prompt, or
+   matter) — matching the privacy model described below.
 
 All annotation text appears in a dedicated **Narration** panel in the
 left sidebar; the main chat area is never covered. Highlight rings

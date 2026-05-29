@@ -7,6 +7,7 @@ alter table public.chat_messages
   add column if not exists preflight_check_id text,
   add column if not exists preflight_verdict  text,
   add column if not exists preflight_policy_id text,
+  add column if not exists preflight_policy_hash text,
   add column if not exists preflight_policy_version text;
 
 create index if not exists idx_chat_messages_preflight_check
@@ -15,4 +16,6 @@ create index if not exists idx_chat_messages_preflight_check
 comment on column public.chat_messages.preflight_check_id is
   'ICME Preflight check_id — cryptographic proof receipt for this message.';
 comment on column public.chat_messages.preflight_verdict is
-  'SAT (allowed), UNSAT (blocked), or ERROR (verification unavailable).';
+  'ALLOWED (allowed), BLOCKED (blocked), or ERROR (verification unavailable).';
+comment on column public.chat_messages.preflight_policy_hash is
+  'sha256 of the compiled policy in force when this message was verified; pins the exact rules.';
